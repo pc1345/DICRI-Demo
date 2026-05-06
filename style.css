@@ -1,0 +1,14 @@
+body {
+  margin: 0;
+  background: #020617;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+
+button, select, textarea {
+  font-family: inherit;
+}
+
+* {
+  box-sizing: border-box;
+}

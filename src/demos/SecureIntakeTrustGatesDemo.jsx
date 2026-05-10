@@ -11,7 +11,7 @@ import {
 
 
 // --- OFFICIAL DICRI LOGO COMPONENT ---
-const DICRILogo = ({ className = "h-12", showText = true }) => (
+const DICRILogo = ({ className = "min-h-[160px]", showText = true }) => (
   <div className={`flex flex-col items-center justify-center ${className}`}>
     <div className="relative h-20 w-20 mb-3">
       <svg viewBox="0 0 100 100" className="h-full w-full drop-shadow-[0_0_15px_rgba(59,130,246,0.4)]" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -437,7 +437,7 @@ const App = () => {
         <div className="max-w-5xl w-full grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-6 animate-in fade-in zoom-in-95 duration-700">
           <div className="bg-slate-900/60 border border-white/10 rounded-[3rem] p-10 shadow-2xl backdrop-blur-3xl text-center space-y-8">
             <DICRILogo />
-            <div className="text-left space-y-3">
+            <div className="text-left space-y-3 border-t border-white/10 pt-6">
               <h2 className="text-2xl font-black text-white">DICRI Secure Access</h2>
               <p className="text-sm text-slate-400 leading-relaxed">
                 Demo authentication simulates identity, MFA, organization, certification, and role validation before any capture session can begin.

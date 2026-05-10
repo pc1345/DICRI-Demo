@@ -21,6 +21,8 @@ import {
   Lock,
   Map,
   MapPin,
+  Printer,
+  QrCode,
   Route,
   Search,
   Shield,
@@ -65,6 +67,15 @@ const SEGMENTS = [
     certNo: 'DICRI-BC-2026-00184',
     certificateType: 'Birth Certificate',
     status: 'Active',
+    certificateStatus: 'Certified',
+    certificateIssueDate: '10 May 2026',
+    certificateReviewDate: '10 May 2027',
+    registryRef: 'REG-PH-001-9C4E',
+    assetClass: 'Underground Fiber Conduit + Access Handholes',
+    segmentLength: '1.2 km',
+    criticalityTier: 'Tier 2 - Metro Backbone',
+    resilienceScore: 82,
+    resilienceGrade: 'A-',
     stageTone: 'green',
     custody: 'Preserved',
     ownerResponse: 'Awaiting acknowledgement',
@@ -100,6 +111,15 @@ const SEGMENTS = [
     certNo: 'DICRI-HC-2026-00088',
     certificateType: 'Health Certificate',
     status: 'In Review',
+    certificateStatus: 'Under Review',
+    certificateIssueDate: 'Pending',
+    certificateReviewDate: 'Pending',
+    registryRef: 'REG-PH-002-2A91',
+    assetClass: 'Underground Fiber Duct + Industrial Access Vaults',
+    segmentLength: '1.8 km',
+    criticalityTier: 'Tier 2 - Industrial Backbone',
+    resilienceScore: 74,
+    resilienceGrade: 'B+',
     stageTone: 'amber',
     custody: 'Preserved',
     ownerResponse: 'Action required',
@@ -109,15 +129,15 @@ const SEGMENTS = [
     trend: [78, 81, 84, 83, 87, 89],
   },
   {
-    id: 'SEG-LG-VI-099',
-    pointA: 'Victoria Island West Boundary',
-    pointZ: 'Victoria Island East Boundary',
-    corridor: 'Coastal Reliability Corridor',
+    id: 'LAG-IKE-SEG-014',
+    pointA: 'Ikeja North Access Boundary',
+    pointZ: 'Ikeja South Access Boundary',
+    corridor: 'Lagos Metro Resilience Corridor',
     portfolio: 'Lagos Urban Infra',
-    owner: 'Lagos Urban Infra',
+    owner: 'Equinox Telecom',
     work: 'Annual certified segment monitoring',
     lifecycle: 'Certified / No Active Work',
-    crew: 'DICRI Tiger Review Desk',
+    crew: 'DICRI Independent Review Desk with Equinox field evidence team',
     expectedCompletion: '2026-06-02',
     lastActivity: 'Renewal marker logged 2026-04-28 09:30',
     evidence: 97,
@@ -132,9 +152,18 @@ const SEGMENTS = [
     exceptionText: 'No open exceptions',
     openNotices: 0,
     nextAction: 'Continue routine monitoring.',
-    certNo: 'DICRI-BC-2026-00210',
+    certNo: 'DICRI-BIRTH-2026-014',
     certificateType: 'Birth Certificate',
     status: 'Active',
+    certificateStatus: 'Certified',
+    certificateIssueDate: '10 May 2026',
+    certificateReviewDate: '10 May 2027',
+    registryRef: 'REG-LAG-014-7F2A',
+    assetClass: 'Underground Fiber Conduit + Handhole Access',
+    segmentLength: '1.0 km',
+    criticalityTier: 'Tier 1 - Metro Resilience Corridor',
+    resilienceScore: 78,
+    resilienceGrade: 'B',
     stageTone: 'green',
     custody: 'Preserved',
     ownerResponse: 'No action required',
@@ -170,6 +199,15 @@ const SEGMENTS = [
     certNo: 'DICRI-QC-2026-00012',
     certificateType: 'Health Certificate',
     status: 'Quarantine',
+    certificateStatus: 'Conditionally Certified',
+    certificateIssueDate: '12 May 2026',
+    certificateReviewDate: 'Under exception review',
+    registryRef: 'REG-PH-044-QC12',
+    assetClass: 'Underground Fiber Conduit + Roadside Handholes',
+    segmentLength: '0.7 km',
+    criticalityTier: 'Tier 2 - Exception Corridor',
+    resilienceScore: 61,
+    resilienceGrade: 'C',
     stageTone: 'red',
     custody: 'Preserved',
     ownerResponse: 'Remediation plan required',
@@ -388,7 +426,7 @@ export default function ClientPortalDemo() {
         </main>
       </div>
 
-      {modal && <DetailModal modal={modal} close={() => setModal(null)} />}
+      {modal && <DetailModal modal={modal} close={() => setModal(null)} onBackToRegistry={() => { setActiveTab('certificates'); setModal(null); }} />}
     </div>
   );
 }
@@ -1057,25 +1095,26 @@ function MetricCard({ icon: Icon, label, value, trend, tone }) {
   );
 }
 
-function DetailModal({ modal, close }) {
+function DetailModal({ modal, close, onBackToRegistry }) {
   const segment = modal.segment;
+  const isCertificate = modal.type === 'certificate';
   return (
     <div className="fixed inset-0 z-[1000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-5">
-      <div className="w-full max-w-3xl rounded-2xl border border-white/10 bg-[#0B1120] shadow-2xl overflow-hidden">
+      <div className={`w-full ${isCertificate ? 'max-w-6xl max-h-[92vh] overflow-y-auto' : 'max-w-3xl'} rounded-2xl border border-white/10 bg-[#0B1120] shadow-2xl overflow-hidden`}>
         <div className="p-5 border-b border-white/10 flex items-start justify-between gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.32em] text-blue-400">
-              {modal.type === 'certificate' ? 'Certificate Detail' : modal.type === 'notice' ? 'Notice Review' : modal.type === 'access' ? 'Access Scope' : modal.type === 'export' ? 'Export Summary' : modal.type === 'map' || modal.type === 'cbyd-map' ? 'Map Detail' : 'Segment Detail'}
+              {modal.type === 'certificate' ? 'DICRI Certified Segment Record' : modal.type === 'notice' ? 'Notice Review' : modal.type === 'access' ? 'Access Scope' : modal.type === 'export' ? 'Export Summary' : modal.type === 'map' || modal.type === 'cbyd-map' ? 'Map Detail' : 'Segment Detail'}
             </p>
             <h2 className="text-2xl font-black text-white mt-2">
-              {modal.type === 'notice' ? modal.notice.id : modal.type === 'access' ? 'Client Portal Redaction Policy' : modal.type === 'export' ? 'Client Export Package' : segment?.id}
+              {modal.type === 'notice' ? modal.notice.id : modal.type === 'access' ? 'Client Portal Redaction Policy' : modal.type === 'export' ? 'Client Export Package' : modal.type === 'certificate' ? segment?.certNo : segment?.id}
             </h2>
           </div>
           <button onClick={close} className="h-10 w-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300">
             <X size={18} />
           </button>
         </div>
-        <div className="p-5 space-y-3">
+        <div className={`${isCertificate ? 'p-4 md:p-6' : 'p-5 space-y-3'}`}>
           {modal.type === 'access' && (
             <>
               <CompactInfo label="Account Role" value="Asset Owner / Portfolio Viewer" wide />
@@ -1100,16 +1139,7 @@ function DetailModal({ modal, close }) {
             </>
           )}
           {modal.type === 'certificate' && segment && (
-            <>
-              <CompactInfo label="Certificate Number" value={segment.certNo} wide />
-              <CompactInfo label="Certificate Type" value={segment.certificateType} />
-              <CompactInfo label="Segment" value={segment.id} />
-              <CompactInfo label="ASCE Quality Level" value={segment.asce} />
-              <CompactInfo label="ASCE Confidence" value={`${segment.confidence}%`} />
-              <CompactInfo label="Evidence Completion" value={`${segment.evidence}%`} />
-              <CompactInfo label="Readiness Score" value={`${segment.readiness}%`} />
-              <CompactInfo label="Chain of Custody" value={segment.custody} tone={segment.custody === 'Preserved' ? 'green' : 'amber'} />
-            </>
+            <CertificatePreview segment={segment} onBackToRegistry={onBackToRegistry} />
           )}
           {(modal.type === 'segment' || modal.type === 'map' || modal.type === 'cbyd-map') && segment && (
             <>
@@ -1123,11 +1153,295 @@ function DetailModal({ modal, close }) {
             </>
           )}
         </div>
-        <div className="p-5 border-t border-white/10 flex justify-end">
-          <PrimaryButton icon={Check} onClick={close}>Done</PrimaryButton>
+        {!isCertificate && (
+          <div className="p-5 border-t border-white/10 flex justify-end">
+            <PrimaryButton icon={Check} onClick={close}>Done</PrimaryButton>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CertificatePreview({ segment, onBackToRegistry }) {
+  const record = buildCertificateRecord(segment);
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-[#07111f] shadow-2xl">
+      <div className="pointer-events-none absolute inset-0 opacity-[0.035]">
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-18deg] text-7xl md:text-9xl font-black tracking-[0.18em] text-white whitespace-nowrap">DEMO SPECIMEN</div>
+      </div>
+      <div className="absolute right-6 top-6 hidden md:flex h-28 w-28 items-center justify-center rounded-full border border-amber-400/25 bg-amber-400/5 text-center text-[10px] font-black uppercase tracking-[0.18em] text-amber-200">
+        DICRI<br />Verified<br />Record
+      </div>
+
+      <div className="relative border-b border-white/10 bg-gradient-to-br from-slate-950 via-[#0B1120] to-blue-950/30 p-6 md:p-8">
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 pr-0 md:pr-32">
+          <div>
+            <div className="flex items-center gap-3">
+              <DICRILogo />
+              <div>
+                <p className="text-3xl font-black tracking-tight text-white">DICRI</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.32em] text-blue-300">The Trust Layer for Underground Infrastructure</p>
+              </div>
+            </div>
+            <div className="mt-7">
+              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-amber-300">Evidence-backed infrastructure certification record</p>
+              <h3 className="mt-2 text-3xl md:text-4xl font-black text-white tracking-tight">DICRI Certified Segment Record</h3>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 lg:w-[360px]">
+            <CertificateInfo label="Certificate ID" value={record.certificateId} wide />
+            <CertificateInfo label="Registry Reference ID" value={record.registryRef} />
+            <CertificateInfo label="Certificate Type" value={record.type} />
+            <CertificateInfo label="Status" value={record.status} tone={record.status === 'Certified' ? 'green' : record.status === 'Under Review' ? 'amber' : 'red'} />
+            <CertificateInfo label="Issue Date" value={record.issueDate} />
+            <CertificateInfo label="Review / Validity Date" value={record.reviewDate} />
+          </div>
+        </div>
+      </div>
+
+      <div className="relative grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-5 p-5 md:p-7">
+        <div className="space-y-5">
+          <CertificateSection title="Asset Identity">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <CertificateInfo label="Asset Owner" value={record.assetOwner} />
+              <CertificateInfo label="Project / Corridor Name" value={record.project} />
+              <CertificateInfo label="Region / State / Locality" value={record.locality} />
+              <CertificateInfo label="Segment ID" value={record.segmentId} />
+              <CertificateInfo label="Asset Class" value={record.assetClass} />
+              <CertificateInfo label="Segment Length" value={record.segmentLength} />
+              <CertificateInfo label="Criticality Tier" value={record.criticalityTier} wide />
+            </div>
+          </CertificateSection>
+
+          <CertificateSection title="Resilience Score Breakdown">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {record.breakdown.map((item) => (
+                <div key={item.label} className="rounded-xl border border-white/10 bg-slate-950/55 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-black text-white">{item.label}</p>
+                    <p className="text-xs font-black text-amber-300">{item.score}/{item.max}</p>
+                  </div>
+                  <p className="mt-2 text-[11px] leading-relaxed text-slate-400">{item.examples}</p>
+                  <ScoreBar value={(item.score / item.max) * 100} tone={item.score / item.max > 0.8 ? 'green' : 'amber'} />
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/10 p-4 flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-200">Total Infrastructure Resilience Score</span>
+              <span className="text-xl font-black text-white">{record.resilienceScore}/100</span>
+            </div>
+          </CertificateSection>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <ListPanel title="Key Strengths" items={record.strengths} tone="green" />
+            <ListPanel title="Key Resilience Gaps" items={record.gaps} tone="amber" />
+            <ListPanel title="Recommended Mitigations" items={record.mitigations} tone="blue" />
+          </div>
+
+          <CertificateSection title="Evidence / Governance Basis">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {record.governance.map((item) => <CertificateInfo key={item.label} label={item.label} value={item.value} tone={item.tone} />)}
+            </div>
+          </CertificateSection>
+        </div>
+
+        <aside className="space-y-5">
+          <CertificateSection title="Certification Scores">
+            <ScoreSummary label="Certification Confidence Score" value={record.confidenceScore} helper="How trustworthy is the record?" tone="blue" />
+            <ScoreSummary label="Infrastructure Resilience Score" value={record.resilienceScore} helper="How resilient is the asset against known operational threats?" tone="gold" />
+            <div className="rounded-xl border border-white/10 bg-slate-950/55 p-4">
+              <p className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-500">Resilience Grade</p>
+              <p className="mt-2 text-4xl font-black text-amber-200">{record.resilienceGrade}</p>
+              <ResilienceGauge value={record.resilienceScore} />
+            </div>
+          </CertificateSection>
+
+          <CertificateSection title="Registry Verification">
+            <div className="rounded-2xl border border-blue-500/25 bg-blue-500/10 p-4">
+              <div className="mx-auto flex h-32 w-32 items-center justify-center rounded-xl border border-white/15 bg-slate-950 text-blue-200">
+                <QrCode size={86} />
+              </div>
+              <p className="mt-4 text-center text-xs font-black uppercase tracking-[0.18em] text-blue-200">Verify this certificate in the DICRI Registry</p>
+            </div>
+            <CertificateInfo label="Certificate Hash" value={record.hash} wide />
+            <CertificateInfo label="Registry Anchor Reference" value={record.anchor} wide />
+            <CertificateInfo label="Registry Status" value="Active / Tamper-evident record verified" tone="green" wide />
+          </CertificateSection>
+
+          <CertificateSection title="Authorization">
+            <div className="rounded-2xl border border-amber-400/25 bg-amber-400/10 p-5 text-center">
+              <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border border-amber-300/35 text-amber-200">
+                <Shield size={42} />
+              </div>
+              <p className="mt-4 text-sm font-black text-white">Authorized DICRI Signatory</p>
+              <p className="mt-1 text-xs text-slate-400">Independent Review / Adjudication Authority</p>
+              <div className="mt-4 border-t border-amber-300/20 pt-4 text-[10px] font-black uppercase tracking-[0.2em] text-amber-200">Digitally Sealed</div>
+            </div>
+          </CertificateSection>
+        </aside>
+      </div>
+
+      <div className="relative border-t border-white/10 bg-slate-950/70 p-5 md:p-6">
+        <p className="text-xs leading-relaxed text-slate-400">
+          This certificate reflects DICRI's evidence-based assessment of the referenced infrastructure segment at the time of review. Certification documents verified condition, traceability, and resilience posture based on captured evidence. It does not guarantee the elimination of future operational risk.
+        </p>
+        <div className="mt-5 flex flex-wrap gap-2 justify-end">
+          <GhostButton icon={ChevronRight} onClick={onBackToRegistry}>Back to Registry</GhostButton>
+          <GhostButton icon={Download} onClick={() => {}}>Download PDF</GhostButton>
+          <GhostButton icon={Printer} onClick={() => {}}>Print Certificate</GhostButton>
         </div>
       </div>
     </div>
+  );
+}
+
+function buildCertificateRecord(segment) {
+  const isLagos = segment.id === 'LAG-IKE-SEG-014';
+  const resilienceScore = segment.resilienceScore || Math.round(segment.readiness * 0.78);
+  return {
+    certificateId: isLagos ? 'DICRI-BIRTH-2026-014' : segment.certNo,
+    registryRef: segment.registryRef || `REG-${segment.id.slice(-3)}-7F2A`,
+    type: segment.certificateType,
+    status: segment.certificateStatus || (segment.status === 'Active' ? 'Certified' : segment.status === 'In Review' ? 'Under Review' : 'Conditionally Certified'),
+    issueDate: segment.certificateIssueDate || segment.date,
+    reviewDate: segment.certificateReviewDate || '10 May 2027',
+    assetOwner: isLagos ? 'Equinox Telecom' : segment.owner,
+    project: isLagos ? 'Lagos Metro Resilience Corridor' : segment.corridor,
+    locality: isLagos ? 'Lagos State / Ikeja' : `${segment.portfolio} / Redacted locality`,
+    segmentId: isLagos ? 'LAG-IKE-SEG-014' : segment.id,
+    assetClass: segment.assetClass || 'Underground Fiber Conduit + Handhole Access',
+    segmentLength: segment.segmentLength || '1.0 km',
+    criticalityTier: segment.criticalityTier || 'Tier 2 - Managed Corridor',
+    confidenceScore: Math.max(82, Math.round(segment.integrity || segment.confidence)),
+    resilienceScore,
+    resilienceGrade: segment.resilienceGrade || segment.resilience,
+    hash: 'sha256:7f2a9c4e18b6d91a5e0f42c8a63bd12e45a8f9076c4a71d8830d1f9b6ce2041a',
+    anchor: 'DICRI-REG-LAGOS-2026-05-10-00014',
+    breakdown: [
+      { label: 'Physical Protection', score: 24, max: 30, examples: 'Burial depth, hardened conduit, handhole locking, protective backfill.' },
+      { label: 'Detection & Monitoring', score: 12, max: 20, examples: 'Lid/tilt intrusion sensors, flood sensors, closure alarms, NOC alert integration.' },
+      { label: 'Environmental Resilience', score: 10, max: 15, examples: 'Flood exposure, drainage risk, water ingress protection, heat and soil exposure.' },
+      { label: 'Operational Protection', score: 14, max: 15, examples: 'CBYD integration, dig-ticket governance, stakeholder notification, locate response SLA.' },
+      { label: 'Route & Network Resilience', score: 8, max: 10, examples: 'Route diversity, alternate path, critical crossing protection.' },
+      { label: 'Documentation Quality', score: 10, max: 10, examples: 'GIS accuracy, as-built completeness, evidence integrity, WORM/hash verification.' },
+    ],
+    strengths: [
+      'Verified depth profile captured across segment',
+      'CBYD governance enabled',
+      'WORM/hash verification complete',
+      'GIS alignment within accepted tolerance',
+    ],
+    gaps: [
+      'No lid intrusion sensor on HH-204',
+      'Flood exposure near drainage crossing',
+      'Standard vault lock still in use at one access point',
+    ],
+    mitigations: [
+      'Install lid/tilt sensor at HH-204',
+      'Add flood sensor to downstream vault',
+      'Upgrade high-risk handhole to secondary security lid',
+      'Schedule post-rain inspection trigger during rainy season',
+    ],
+    governance: [
+      { label: 'Trusted Worker(s)', value: 'Chinedu Okafor - Trusted Capture Operator; Amina Bello - Independent Verification Operator', tone: 'green' },
+      { label: 'Trusted Device(s)', value: 'GNSS Receiver GNSS-2241; GPR Scanner GPR-1187', tone: 'green' },
+      { label: 'Calibration Status', value: 'Both devices calibration valid at capture', tone: 'green' },
+      { label: 'Time / Location Validation', value: '10 May 2026, 09:42 WAT / Ikeja chainage markers verified', tone: 'green' },
+      { label: 'Capture Method', value: 'GNSS corridor capture + independent GPR depth verification', tone: 'blue' },
+      { label: 'GIS Accuracy', value: 'Alignment within 0.42m accepted tolerance', tone: 'green' },
+      { label: 'Adjudication Status', value: 'Independent DICRI review complete', tone: 'green' },
+      { label: 'WORM / Hash Verification', value: 'Evidence packet hash locked and registry anchored', tone: 'green' },
+    ],
+  };
+}
+
+function CertificateSection({ title, children }) {
+  return (
+    <section className="rounded-2xl border border-white/10 bg-slate-900/55 p-4 md:p-5">
+      <h4 className="text-[10px] font-black uppercase tracking-[0.24em] text-blue-300">{title}</h4>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
+function CertificateInfo({ label, value, tone, wide }) {
+  const tones = {
+    amber: 'text-amber-300',
+    red: 'text-red-300',
+    green: 'text-green-300',
+    blue: 'text-blue-300',
+  };
+  return (
+    <div className={`rounded-xl border border-white/10 bg-slate-950/55 p-3 ${wide ? 'md:col-span-2' : ''}`}>
+      <p className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">{label}</p>
+      <p className={`mt-1.5 text-xs font-bold leading-relaxed ${tones[tone] || 'text-slate-200'}`}>{value}</p>
+    </div>
+  );
+}
+
+function ScoreSummary({ label, value, helper, tone }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-slate-950/55 p-4 mb-3">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <p className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-500">{label}</p>
+          <p className="mt-1 text-xs text-slate-400">{helper}</p>
+        </div>
+        <p className={`text-3xl font-black ${tone === 'gold' ? 'text-amber-200' : 'text-blue-200'}`}>{value}<span className="text-sm text-slate-500">/100</span></p>
+      </div>
+      <ScoreBar value={value} tone={tone === 'gold' ? 'amber' : 'blue'} />
+    </div>
+  );
+}
+
+function ScoreBar({ value, tone }) {
+  const colors = {
+    green: 'bg-green-400',
+    amber: 'bg-amber-400',
+    blue: 'bg-blue-400',
+  };
+  return (
+    <div className="mt-3 h-2 rounded-full bg-slate-800 overflow-hidden">
+      <div className={`h-full rounded-full ${colors[tone] || colors.blue}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+    </div>
+  );
+}
+
+function ResilienceGauge({ value }) {
+  return (
+    <div className="mt-4">
+      <div className="grid grid-cols-3 h-3 rounded-full overflow-hidden bg-slate-800">
+        <div className="bg-red-400/70" />
+        <div className="bg-amber-400/80" />
+        <div className="bg-green-400/80" />
+      </div>
+      <div className="relative h-5">
+        <div className="absolute top-1 h-4 w-0.5 bg-white" style={{ left: `${Math.max(0, Math.min(100, value))}%` }} />
+      </div>
+      <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest text-slate-500">
+        <span>Risk</span>
+        <span>Watch</span>
+        <span>Resilient</span>
+      </div>
+    </div>
+  );
+}
+
+function ListPanel({ title, items, tone }) {
+  const dot = tone === 'green' ? 'bg-green-400' : tone === 'amber' ? 'bg-amber-400' : 'bg-blue-400';
+  return (
+    <section className="rounded-2xl border border-white/10 bg-slate-900/55 p-4">
+      <h4 className="text-[10px] font-black uppercase tracking-[0.22em] text-white">{title}</h4>
+      <div className="mt-4 space-y-3">
+        {items.map((item) => (
+          <div key={item} className="flex gap-2.5 text-xs leading-relaxed text-slate-300">
+            <span className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${dot}`} />
+            <span>{item}</span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

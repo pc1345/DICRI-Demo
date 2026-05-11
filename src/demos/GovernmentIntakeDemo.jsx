@@ -678,6 +678,11 @@ export default function GovernmentIntakeDemo() {
     setStep(1);
   };
 
+  const openRegulatorReview = () => {
+    setMode('review');
+    setActiveTab('dashboard');
+  };
+
   const openRoleDashboard = () => {
     if (mode === 'review') {
       setMode('review');
@@ -752,12 +757,24 @@ export default function GovernmentIntakeDemo() {
 
   const renderMain = () => {
     if (mode === 'landing') {
-      return <CBYDLanding onStartIntake={openNewIntake} onOpenReview={() => setMode('review')} />;
+      return <CBYDLanding onStartIntake={openNewIntake} onOpenReview={openRegulatorReview} />;
     }
     if (mode === 'intake-auth') {
       return <IntakeAuthPage authForm={authForm} setAuthForm={setAuthForm} onAuthenticate={authenticateIntake} onBack={() => setMode('landing')} />;
     }
     if (mode === 'review') {
+      if (activeTab === 'intakes') {
+        return <IntakesPage countryName={countryName} records={filteredRecords} filters={filters} setFilters={setFilters} regions={availableRegions} categories={availableCategories} statuses={availableStatuses} onOpen={selectRecord} onNew={openNewIntake} />;
+      }
+      if (activeTab === 'applications') {
+        return <RegulatorApplicationsPage />;
+      }
+      if (activeTab === 'permits') {
+        return <RegulatorPermitsPage />;
+      }
+      if (activeTab === 'reports') {
+        return <RegulatorReportsPage />;
+      }
       return <RegulatorReviewConsole onStartIntake={openNewIntake} />;
     }
     if (mode === 'intake') {
@@ -1266,6 +1283,152 @@ function RegulatorDetailPanel({ row, onClose }) {
         </div>
       </div>
     </aside>
+  );
+}
+
+function RegulatorApplicationsPage() {
+  const applications = [
+    { id: 'APP-RIV-2026-014', requester: 'Delta Civil Works Ltd.', workType: 'Drainage Construction', market: 'Nigeria / Rivers', permit: 'PHT-DR-2218', submitted: '2026-05-10', status: 'In Review', reviewer: 'R. Okafor', stage: 'Conflict Screening' },
+    { id: 'APP-LAG-2026-118', requester: 'UrbanLink Contractors', workType: 'Road Rehabilitation', market: 'Nigeria / Lagos', permit: 'LAG-RD-4491', submitted: '2026-05-09', status: 'Conditional Proceed', reviewer: 'A. Bello', stage: 'Owner Response Complete' },
+    { id: 'APP-ABJ-2026-073', requester: 'Metro Utility Works', workType: 'Utility Crossing', market: 'Nigeria / FCT', permit: 'ABJ-ROW-8830', submitted: '2026-05-08', status: 'Escalated', reviewer: 'M. Danladi', stage: 'Regulator Review' },
+    { id: 'APP-NFC-2026-031', requester: 'NorthGrid Fiber Services', workType: 'Fiber Deployment', market: 'Nigeria / Kano', permit: 'NFC-KAN-2210', submitted: '2026-05-07', status: 'Owner Response Pending', reviewer: 'E. Nwosu', stage: 'Stakeholder Notification' },
+  ];
+  return (
+    <section className="space-y-6">
+      <PageIntro eyebrow="Regulator View" title="CBYD Applications" text="Permit-linked excavation applications under conflict screening, stakeholder notification, and regulator review." />
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
+        <table className="w-full min-w-[980px] text-left">
+          <thead className="bg-slate-50 text-xs uppercase tracking-widest text-slate-500">
+            <tr>
+              {['Application ID', 'Requester', 'Work Type', 'Market / Region', 'Linked Permit', 'Submitted Date', 'Review Status', 'Assigned Reviewer', 'Current Stage'].map((header) => <th key={header} className="px-5 py-4">{header}</th>)}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {applications.map((row) => (
+              <tr key={row.id} className="hover:bg-slate-50">
+                <td className="px-5 py-5 font-black">{row.id}</td>
+                <td className="px-5 py-5">{row.requester}</td>
+                <td className="px-5 py-5">{row.workType}</td>
+                <td className="px-5 py-5">{row.market}</td>
+                <td className="px-5 py-5 font-mono text-sm">{row.permit}</td>
+                <td className="px-5 py-5">{row.submitted}</td>
+                <td className="px-5 py-5"><StatusBadge status={row.status} /></td>
+                <td className="px-5 py-5">{row.reviewer}</td>
+                <td className="px-5 py-5">{row.stage}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function RegulatorPermitsPage() {
+  const rows = regulatorRowsForWindow('Last 30 days');
+  return (
+    <section className="space-y-6">
+      <PageIntro eyebrow="Regulator View" title="Permit Registry" text="Permit-linked CBYD activity with fee-bearing event status, SLA state, and stakeholder notification context." />
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <KpiCard label="Visible Permits" value={rows.length} sub="Last 30 days" tone="blue" icon={FileText} />
+        <KpiCard label="Warning / Exception" value={rows.filter((row) => row.sla !== 'On Track').length} sub="SLA status" tone="amber" icon={AlertTriangle} />
+        <KpiCard label="Fee-Bearing Events" value={rows.filter((row) => row.feeBearing === 'Yes').length} sub="Tracked" tone="green" icon={Database} />
+        <KpiCard label="Notifications Linked" value={rows.reduce((sum, row) => sum + row.owners.length, 0)} sub="Stakeholders" tone="blue" icon={Bell} />
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
+        <table className="w-full min-w-[1100px] text-left">
+          <thead className="bg-slate-50 text-xs uppercase tracking-widest text-slate-500">
+            <tr>
+              {['Permit Number', 'CBYD Ticket', 'Issuing Authority', 'Market / Region', 'Corridor / Location', 'Permit Status', 'Fee-Bearing Event', 'SLA Status', 'Last Updated'].map((header) => <th key={header} className="px-5 py-4">{header}</th>)}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {rows.map((row) => (
+              <tr key={row.ticket} className="hover:bg-slate-50">
+                <td className="px-5 py-5 font-mono text-sm font-bold">{row.permitNumber}</td>
+                <td className="px-5 py-5 font-black">{row.ticket}</td>
+                <td className="px-5 py-5">{row.agency}</td>
+                <td className="px-5 py-5">{row.market}</td>
+                <td className="px-5 py-5">{row.corridor}</td>
+                <td className="px-5 py-5">{row.status}</td>
+                <td className="px-5 py-5"><StatusBadge status={row.feeBearing} /></td>
+                <td className="px-5 py-5"><StatusBadge status={row.sla} /></td>
+                <td className="px-5 py-5">{row.submittedDate}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function RegulatorReportsPage() {
+  const [reportingWindow, setReportingWindow] = useState('Last 30 days');
+  const metrics = regulatorMetricsForWindow(reportingWindow);
+  const rows = regulatorRowsForWindow(reportingWindow);
+  const regionCounts = rows.reduce((summary, row) => ({ ...summary, [row.market]: (summary[row.market] || 0) + 1 }), {});
+  const slaExceptions = rows.filter((row) => row.sla !== 'On Track');
+  return (
+    <section className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <PageIntro eyebrow="Regulator View" title="Regulator Reports" text="Oversight reporting for permit-linked CBYD activity, conflict screening, SLA exceptions, stakeholder notification, and PPP-linked reporting." />
+        <div className="flex flex-wrap gap-3">
+          <button className="rounded-xl border border-[#001B3D] bg-white px-5 py-3 text-xs font-black uppercase tracking-widest hover:bg-slate-50">Export Report</button>
+          <button className="rounded-xl border border-[#001B3D] bg-white px-5 py-3 text-xs font-black uppercase tracking-widest hover:bg-slate-50">Download CSV</button>
+          <button className="rounded-xl bg-[#D4A100] px-5 py-3 text-xs font-black uppercase tracking-widest text-white hover:bg-[#b98d00]">Generate NCC Summary</button>
+        </div>
+      </div>
+      <Card title="Reporting Window" icon={Calendar}>
+        <div className="max-w-xs">
+          <ControlledSelect label="Date Range" value={reportingWindow} options={REGULATOR_WINDOW_OPTIONS} onChange={setReportingWindow} />
+        </div>
+      </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-6 gap-4">
+        <KpiCard label="CBYD Tickets Submitted" value={metrics.submitted} sub={reportingWindow} tone="blue" icon={ClipboardCheck} />
+        <KpiCard label="Permits Linked" value={metrics.permits} sub={reportingWindow} tone="green" icon={FileText} />
+        <KpiCard label="Conflicts Detected" value={metrics.conflicts} sub={reportingWindow} tone="amber" icon={AlertTriangle} />
+        <KpiCard label="SLA Exceptions" value={metrics.slaExceptions} sub={reportingWindow} tone="red" icon={Clock} />
+        <KpiCard label="Fee-Bearing Events" value={metrics.feeEvents} sub={reportingWindow} tone="green" icon={Database} />
+        <KpiCard label="Stakeholder Notifications" value={metrics.notifications} sub={reportingWindow} tone="blue" icon={Bell} />
+      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <Card title="Regional Activity Summary" icon={Map}>
+          {Object.entries(regionCounts).map(([region, count]) => <ReportBar key={region} label={region} value={Math.max(8, Math.round((count / rows.length) * 100))} tone="blue" />)}
+        </Card>
+        <Card title="SLA Exception Summary" icon={Clock}>
+          <Metric label="Items requiring oversight attention" value={slaExceptions.length} />
+          <Metric label="Primary exception pattern" value={slaExceptions[0]?.status || 'No active exception'} />
+        </Card>
+        <Card title="Conflict Screening Trends" icon={Route}>
+          <ReportBar label="Low conflict corridors" value={38} tone="green" />
+          <ReportBar label="Multi-owner conflict corridors" value={47} tone="amber" />
+          <ReportBar label="Escalated corridors" value={15} tone="red" />
+        </Card>
+        <Card title="Stakeholder Notification Status" icon={Bell}>
+          <ReportBar label="Acknowledged" value={72} tone="green" />
+          <ReportBar label="Pending" value={20} tone="amber" />
+          <ReportBar label="Escalated" value={8} tone="red" />
+        </Card>
+        <Card title="Fee-Bearing Event Summary" icon={Database} className="xl:col-span-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Metric label="Tracked fee-bearing events" value={metrics.feeEvents} />
+            <Metric label="Linked to permit records" value={metrics.permits} />
+            <Metric label="Reporting status" value="Ready for oversight summary" />
+          </div>
+        </Card>
+      </div>
+    </section>
+  );
+}
+
+function PageIntro({ eyebrow, title, text }) {
+  return (
+    <div>
+      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-700">{eyebrow}</p>
+      <h1 className="mt-2 text-4xl font-black tracking-tight">{title}</h1>
+      <p className="mt-2 max-w-4xl text-lg text-slate-600">{text}</p>
+    </div>
   );
 }
 

@@ -7,6 +7,7 @@ import {
   Check,
   CheckCircle2,
   ChevronRight,
+  Clock,
   ClipboardCheck,
   Database,
   Download,
@@ -1009,14 +1010,14 @@ function Dashboard({ records, filteredRecords, countryName, onOpenQueue, onOpen,
 }
 
 function RegulatorReviewConsole() {
-  const [reviewFilters, setReviewFilters] = useState({ search: '', market: 'All', status: 'All', dateRange: '30 days' });
+  const [reviewFilters, setReviewFilters] = useState({ permit: '', ticket: '', market: 'All', status: 'All', dateRange: '30 days' });
   const [selectedTicket, setSelectedTicket] = useState(REGULATOR_ROWS[0]);
   const filtered = REGULATOR_ROWS.filter((row) => {
-    const search = reviewFilters.search.toLowerCase();
-    const searchOk = !search || [row.permitNumber, row.ticket, row.submittedBy, row.corridor].join(' ').toLowerCase().includes(search);
+    const permitOk = !reviewFilters.permit || row.permitNumber.toLowerCase().includes(reviewFilters.permit.toLowerCase());
+    const ticketOk = !reviewFilters.ticket || row.ticket.toLowerCase().includes(reviewFilters.ticket.toLowerCase());
     const marketOk = reviewFilters.market === 'All' || row.market === reviewFilters.market;
     const statusOk = reviewFilters.status === 'All' || row.status === reviewFilters.status;
-    return searchOk && marketOk && statusOk;
+    return permitOk && ticketOk && marketOk && statusOk;
   });
   const metrics = [
     ['Submitted CBYD Tickets', 42, ClipboardCheck, 'blue'],
@@ -1046,12 +1047,13 @@ function RegulatorReviewConsole() {
             </p>
           </Card>
           <Card title="Review Filters" icon={Filter}>
-            <div className="grid grid-cols-5 gap-3">
-              <EditableField label="Permit Number / CBYD Ticket" value={reviewFilters.search} onChange={(search) => setReviewFilters((current) => ({ ...current, search }))} />
+            <div className="grid grid-cols-1 lg:grid-cols-6 gap-3">
+              <EditableField label="Permit Number" value={reviewFilters.permit} onChange={(permit) => setReviewFilters((current) => ({ ...current, permit }))} />
+              <EditableField label="CBYD Ticket" value={reviewFilters.ticket} onChange={(ticket) => setReviewFilters((current) => ({ ...current, ticket }))} />
               <ControlledSelect label="Market / Region" value={reviewFilters.market} options={['All', ...MARKET_REGIONS]} onChange={(market) => setReviewFilters((current) => ({ ...current, market }))} />
               <ControlledSelect label="Status" value={reviewFilters.status} options={['All', ...new Set(REGULATOR_ROWS.map((row) => row.status))]} onChange={(status) => setReviewFilters((current) => ({ ...current, status }))} />
               <ControlledSelect label="Date Range" value={reviewFilters.dateRange} options={['7 days', '30 days', '90 days']} onChange={(dateRange) => setReviewFilters((current) => ({ ...current, dateRange }))} />
-              <div className="flex items-end"><button onClick={() => setReviewFilters({ search: '', market: 'All', status: 'All', dateRange: '30 days' })} className="min-h-[46px] w-full rounded-lg border border-[#001B3D] px-4 py-3 font-black hover:bg-slate-50">Reset</button></div>
+              <div className="flex items-end"><button onClick={() => setReviewFilters({ permit: '', ticket: '', market: 'All', status: 'All', dateRange: '30 days' })} className="min-h-[46px] w-full rounded-lg border border-[#001B3D] px-4 py-3 font-black hover:bg-slate-50">Reset</button></div>
             </div>
           </Card>
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
@@ -1063,7 +1065,7 @@ function RegulatorReviewConsole() {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {filtered.map((row) => (
-                  <tr key={row.ticket} onClick={() => setSelectedTicket(row)} className={`cursor-pointer hover:bg-slate-50 ${selectedTicket.ticket === row.ticket ? 'bg-blue-50' : ''}`}>
+                  <tr key={row.ticket} onClick={() => setSelectedTicket(row)} className={`cursor-pointer hover:bg-slate-50 ${selectedTicket?.ticket === row.ticket ? 'bg-blue-50' : ''}`}>
                     <td className="px-4 py-4 font-mono text-sm font-bold">{row.permitNumber}</td>
                     <td className="px-4 py-4 font-black">{row.ticket}</td>
                     <td className="px-4 py-4">{row.submittedBy}</td>
@@ -1082,13 +1084,21 @@ function RegulatorReviewConsole() {
             </table>
           </div>
         </div>
-        <RegulatorDetailPanel row={selectedTicket} />
+        <RegulatorDetailPanel row={selectedTicket} onClose={() => setSelectedTicket(null)} />
       </div>
     </section>
   );
 }
 
-function RegulatorDetailPanel({ row }) {
+function RegulatorDetailPanel({ row, onClose }) {
+  if (!row) {
+    return (
+      <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sticky top-24">
+        <h2 className="text-xl font-black mb-2">Review Detail</h2>
+        <p className="text-sm text-slate-600">Select a CBYD ticket row to inspect permit linkage, notifications, SLA status, and audit history.</p>
+      </aside>
+    );
+  }
   const audit = [
     `Intake created by ${row.submittedBy} - ${row.submittedDate}`,
     'Corridor screened - 2026-05-10 10:44',
@@ -1100,7 +1110,10 @@ function RegulatorDetailPanel({ row }) {
   ];
   return (
     <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sticky top-24">
-      <h2 className="text-xl font-black mb-4">Review Detail</h2>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <h2 className="text-xl font-black">Review Detail</h2>
+        <button onClick={onClose} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black hover:bg-slate-50">Close</button>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <SnapshotItem label="Permit Number" value={row.permitNumber} />
         <SnapshotItem label="CBYD Ticket" value={row.ticket} />
@@ -1690,9 +1703,9 @@ function ReportBar({ label, value, tone }) {
   return <div className="py-4 border-b border-slate-200 last:border-0"><div className="flex items-center justify-between mb-2"><span className="font-bold">{label}</span><span className="font-black">{value}%</span></div><div className="h-2 rounded-full bg-slate-200 overflow-hidden"><div className={`h-full ${color}`} style={{ width: `${value}%` }} /></div></div>;
 }
 
-function KpiCard({ label, value, sub, tone }) {
+function KpiCard({ label, value, sub, tone, icon: Icon }) {
   const toneClass = tone === 'green' ? 'text-green-700 bg-green-50 border-green-200' : tone === 'amber' ? 'text-amber-700 bg-amber-50 border-amber-200' : tone === 'red' ? 'text-red-700 bg-red-50 border-red-200' : 'text-blue-700 bg-blue-50 border-blue-200';
-  return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm"><p className="text-base mb-3">{label}</p><div className="text-4xl font-black mb-2">{value}</div><span className={`inline-block rounded-lg border px-3 py-1 text-xs font-black ${toneClass}`}>{sub}</span></div>;
+  return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">{Icon && <Icon size={22} className="mx-auto mb-3 text-[#062247]" />}<p className="text-base mb-3">{label}</p><div className="text-4xl font-black mb-2">{value}</div><span className={`inline-block rounded-lg border px-3 py-1 text-xs font-black ${toneClass}`}>{sub}</span></div>;
 }
 
 function MixCard({ icon: Icon, label, value }) {

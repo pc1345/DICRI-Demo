@@ -533,6 +533,105 @@ const REGULATOR_ROWS = [
   },
 ];
 
+const REGULATOR_WINDOW_OPTIONS = ['Last 30 days', 'Last 60 days', 'Last 90 days', 'All time'];
+
+const REGULATOR_METRICS_BY_WINDOW = {
+  'Last 30 days': { submitted: 5, permits: 4, conflicts: 3, notifications: 11, slaExceptions: 1, feeEvents: 4 },
+  'Last 60 days': { submitted: 14, permits: 12, conflicts: 7, notifications: 31, slaExceptions: 2, feeEvents: 11 },
+  'Last 90 days': { submitted: 23, permits: 20, conflicts: 11, notifications: 52, slaExceptions: 3, feeEvents: 18 },
+  'All time': { submitted: 42, permits: 36, conflicts: 18, notifications: 91, slaExceptions: 5, feeEvents: 34 },
+};
+
+const REGULATOR_SYNTHETIC_PROFILES = [
+  {
+    code: 'RIV',
+    agency: 'Rivers Permit Office',
+    market: 'Nigeria / Rivers',
+    submittedBy: 'R. Okafor',
+    officerId: 'RIV-INT-042',
+    corridor: 'Garrison Junction to Elekahia Road',
+    owners: ['Fiber Agency', 'Water Corporation', 'Power Distribution Co.', 'Drainage Dept.'],
+  },
+  {
+    code: 'LAG',
+    agency: 'Lagos Infrastructure Coordination Office',
+    market: 'Nigeria / Lagos',
+    submittedBy: 'A. Bello',
+    officerId: 'LAG-INT-118',
+    corridor: 'Ikeja CBD to Maryland Exchange',
+    owners: ['Equinox Telecom', 'Water Corporation'],
+  },
+  {
+    code: 'ABJ',
+    agency: 'Abuja ROW Coordination Desk',
+    market: 'Nigeria / FCT',
+    submittedBy: 'M. Danladi',
+    officerId: 'ABJ-INT-073',
+    corridor: 'Central Business District Segment A',
+    owners: ['Fiber Agency', 'Gas Utility', 'Power Distribution Co.', 'Water Board', 'Transport Authority'],
+  },
+  {
+    code: 'NFC',
+    agency: 'National Fiber Corridor Desk',
+    market: 'Nigeria / Kano',
+    submittedBy: 'E. Nwosu',
+    officerId: 'NFC-INT-031',
+    corridor: 'Kano Metro Ring Segment 2',
+    owners: ['State Fiber Agency'],
+  },
+  {
+    code: 'OGN',
+    agency: 'National Fiber Corridor Desk',
+    market: 'Nigeria / Ogun',
+    submittedBy: 'P. Musa',
+    officerId: 'NFC-INT-066',
+    corridor: 'Abeokuta Industrial Access Route',
+    owners: ['State Fiber Agency', 'Power Distribution Co.'],
+  },
+];
+
+function regulatorMetricsForWindow(window) {
+  return REGULATOR_METRICS_BY_WINDOW[window] || REGULATOR_METRICS_BY_WINDOW['Last 30 days'];
+}
+
+function regulatorRowsForWindow(window) {
+  const targetCount = regulatorMetricsForWindow(window).submitted;
+  return Array.from({ length: targetCount }, (_, index) => {
+    if (REGULATOR_ROWS[index]) return REGULATOR_ROWS[index];
+
+    const profile = REGULATOR_SYNTHETIC_PROFILES[index % REGULATOR_SYNTHETIC_PROFILES.length];
+    const serial = index + 41;
+    const day = String(Math.max(1, 10 - (index % 28))).padStart(2, '0');
+    const hour = String(8 + (index % 9)).padStart(2, '0');
+    const conflicts = index % 6 === 0 ? 0 : (index % 5) + 1;
+    const sla = index % 11 === 0 ? 'Exception' : index % 4 === 0 ? 'Warning' : 'On Track';
+    const status = sla === 'Exception'
+      ? 'Escalated to regulator review'
+      : sla === 'Warning'
+        ? 'Under conflict review'
+        : index % 3 === 0
+          ? 'Cleared for conditional proceed'
+          : 'Awaiting owner response';
+
+    return {
+      permitNumber: `${profile.code}-PER-2026-${String(serial).padStart(3, '0')}`,
+      ticket: `CBYD-${profile.code}-${String(serial).padStart(5, '0')}`,
+      submittedBy: profile.submittedBy,
+      officerId: profile.officerId,
+      agency: profile.agency,
+      market: profile.market,
+      corridor: profile.corridor,
+      conflicts,
+      owners: profile.owners,
+      notificationStatus: conflicts === 0 ? 'No conflicts detected' : sla === 'Exception' ? `${Math.max(conflicts - 1, 1)} acknowledged / 1 escalated` : `${Math.max(conflicts - 1, 1)} acknowledged / 1 pending`,
+      sla,
+      status,
+      submittedDate: `2026-05-${day} ${hour}:20`,
+      feeBearing: index % 5 === 0 ? 'No' : 'Yes',
+    };
+  });
+}
+
 const NEW_INTAKE_TEMPLATE = { ...INTAKES[0], id: 'INT-NEW', packetId: 'CBYD-INT-DRAFT', requester: 'New Requester', completeness: 34, status: 'Draft Intake Request', permitRef: 'TBD', contact: 'Unassigned', email: 'pending@example.demo', phone: 'Pending', attachments: 0 };
 
 export default function GovernmentIntakeDemo() {
@@ -577,6 +676,15 @@ export default function GovernmentIntakeDemo() {
     setMode('landing');
     setActiveTab('dashboard');
     setStep(1);
+  };
+
+  const openRoleDashboard = () => {
+    if (mode === 'review') {
+      setMode('review');
+      setActiveTab('dashboard');
+      return;
+    }
+    openDashboard();
   };
 
   const openNewIntake = () => {
@@ -650,7 +758,7 @@ export default function GovernmentIntakeDemo() {
       return <IntakeAuthPage authForm={authForm} setAuthForm={setAuthForm} onAuthenticate={authenticateIntake} onBack={() => setMode('landing')} />;
     }
     if (mode === 'review') {
-      return <RegulatorReviewConsole />;
+      return <RegulatorReviewConsole onStartIntake={openNewIntake} />;
     }
     if (mode === 'intake') {
       return (
@@ -692,10 +800,15 @@ export default function GovernmentIntakeDemo() {
         selectCountry={selectCountry}
         activeTab={activeTab}
         setActiveTab={(tab) => {
+          if (mode === 'review') {
+            setMode('review');
+            setActiveTab(tab);
+            return;
+          }
           setMode('dashboard');
           setActiveTab(tab);
         }}
-        openDashboard={openDashboard}
+        openDashboard={openRoleDashboard}
         notificationOpen={notificationOpen}
         setNotificationOpen={setNotificationOpen}
         onNotification={(notification) => {
@@ -1009,34 +1122,50 @@ function Dashboard({ records, filteredRecords, countryName, onOpenQueue, onOpen,
   );
 }
 
-function RegulatorReviewConsole() {
-  const [reviewFilters, setReviewFilters] = useState({ permit: '', ticket: '', market: 'All', status: 'All', dateRange: '30 days' });
+function RegulatorReviewConsole({ onStartIntake }) {
+  const [reviewFilters, setReviewFilters] = useState({ permit: '', ticket: '', market: 'All', status: 'All', dateRange: 'Last 30 days' });
   const [selectedTicket, setSelectedTicket] = useState(REGULATOR_ROWS[0]);
-  const filtered = REGULATOR_ROWS.filter((row) => {
+  const windowMetrics = regulatorMetricsForWindow(reviewFilters.dateRange);
+  const windowRows = regulatorRowsForWindow(reviewFilters.dateRange);
+  const filtered = windowRows.filter((row) => {
     const permitOk = !reviewFilters.permit || row.permitNumber.toLowerCase().includes(reviewFilters.permit.toLowerCase());
     const ticketOk = !reviewFilters.ticket || row.ticket.toLowerCase().includes(reviewFilters.ticket.toLowerCase());
     const marketOk = reviewFilters.market === 'All' || row.market === reviewFilters.market;
     const statusOk = reviewFilters.status === 'All' || row.status === reviewFilters.status;
     return permitOk && ticketOk && marketOk && statusOk;
   });
+  const activeTicket = selectedTicket === null ? null : filtered.find((row) => row.ticket === selectedTicket?.ticket) || filtered[0] || null;
   const metrics = [
-    ['Submitted CBYD Tickets', 42, ClipboardCheck, 'blue'],
-    ['Permits Linked', 36, FileText, 'green'],
-    ['Conflicts Detected', 18, AlertTriangle, 'amber'],
-    ['Notifications Issued', 91, Bell, 'blue'],
-    ['SLA Exceptions', 5, Clock, 'red'],
-    ['Fee-Bearing Events', 34, Database, 'green'],
+    ['Submitted CBYD Tickets', windowMetrics.submitted, ClipboardCheck, 'blue'],
+    ['Permits Linked', windowMetrics.permits, FileText, 'green'],
+    ['Conflicts Detected', windowMetrics.conflicts, AlertTriangle, 'amber'],
+    ['Notifications Issued', windowMetrics.notifications, Bell, 'blue'],
+    ['SLA Exceptions', windowMetrics.slaExceptions, Clock, 'red'],
+    ['Fee-Bearing Events', windowMetrics.feeEvents, Database, 'green'],
   ];
   return (
     <section className="space-y-6">
       <div className="rounded-3xl border border-white/10 bg-[#071A33] p-7 text-white shadow-2xl">
-        <p className="text-[10px] font-black uppercase tracking-[0.32em] text-blue-300">Authorized Oversight</p>
-        <h1 className="mt-3 text-4xl font-black tracking-tight">Regulator Review Console</h1>
-        <p className="mt-3 max-w-4xl text-sm leading-relaxed text-blue-100/80">Permit-linked CBYD activity, conflict screening records, stakeholder notifications, and audit status.</p>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.32em] text-blue-300">Authorized Oversight</p>
+              <span className="rounded-full border border-[#D4A100]/30 bg-[#D4A100]/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-200">Regulator View</span>
+            </div>
+            <h1 className="mt-3 text-4xl font-black tracking-tight">Regulator Review Console</h1>
+            <p className="mt-3 max-w-4xl text-sm leading-relaxed text-blue-100/80">Permit-linked CBYD activity, conflict screening records, stakeholder notifications, and audit status.</p>
+            <p className="mt-4 inline-flex rounded-full border border-blue-400/25 bg-blue-500/10 px-4 py-2 text-xs font-black uppercase tracking-widest text-blue-100">Reporting window: {reviewFilters.dateRange}</p>
+          </div>
+          <button onClick={onStartIntake} className="rounded-xl bg-[#D4A100] px-6 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg hover:bg-[#b98d00]">Start New Intake</button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm font-bold text-slate-700 shadow-sm">
+        Metrics reflect selected reporting window. Change the Date Range filter to reconcile the oversight totals with the visible regulator records.
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-6 gap-4">
-        {metrics.map(([label, value, Icon, tone]) => <KpiCard key={label} label={label} value={value} sub="Oversight" tone={tone} icon={Icon} />)}
+        {metrics.map(([label, value, Icon, tone]) => <KpiCard key={label} label={label} value={value} sub={reviewFilters.dateRange} tone={tone} icon={Icon} />)}
       </div>
 
       <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_420px] gap-5 items-start">
@@ -1051,9 +1180,9 @@ function RegulatorReviewConsole() {
               <EditableField label="Permit Number" value={reviewFilters.permit} onChange={(permit) => setReviewFilters((current) => ({ ...current, permit }))} />
               <EditableField label="CBYD Ticket" value={reviewFilters.ticket} onChange={(ticket) => setReviewFilters((current) => ({ ...current, ticket }))} />
               <ControlledSelect label="Market / Region" value={reviewFilters.market} options={['All', ...MARKET_REGIONS]} onChange={(market) => setReviewFilters((current) => ({ ...current, market }))} />
-              <ControlledSelect label="Status" value={reviewFilters.status} options={['All', ...new Set(REGULATOR_ROWS.map((row) => row.status))]} onChange={(status) => setReviewFilters((current) => ({ ...current, status }))} />
-              <ControlledSelect label="Date Range" value={reviewFilters.dateRange} options={['7 days', '30 days', '90 days']} onChange={(dateRange) => setReviewFilters((current) => ({ ...current, dateRange }))} />
-              <div className="flex items-end"><button onClick={() => setReviewFilters({ permit: '', ticket: '', market: 'All', status: 'All', dateRange: '30 days' })} className="min-h-[46px] w-full rounded-lg border border-[#001B3D] px-4 py-3 font-black hover:bg-slate-50">Reset</button></div>
+              <ControlledSelect label="Status" value={reviewFilters.status} options={['All', ...new Set(windowRows.map((row) => row.status))]} onChange={(status) => setReviewFilters((current) => ({ ...current, status }))} />
+              <ControlledSelect label="Date Range" value={reviewFilters.dateRange} options={REGULATOR_WINDOW_OPTIONS} onChange={(dateRange) => setReviewFilters((current) => ({ ...current, dateRange }))} />
+              <div className="flex items-end"><button onClick={() => setReviewFilters({ permit: '', ticket: '', market: 'All', status: 'All', dateRange: 'Last 30 days' })} className="min-h-[46px] w-full rounded-lg border border-[#001B3D] px-4 py-3 font-black hover:bg-slate-50">Reset</button></div>
             </div>
           </Card>
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
@@ -1065,7 +1194,7 @@ function RegulatorReviewConsole() {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {filtered.map((row) => (
-                  <tr key={row.ticket} onClick={() => setSelectedTicket(row)} className={`cursor-pointer hover:bg-slate-50 ${selectedTicket?.ticket === row.ticket ? 'bg-blue-50' : ''}`}>
+                  <tr key={row.ticket} onClick={() => setSelectedTicket(row)} className={`cursor-pointer hover:bg-slate-50 ${activeTicket?.ticket === row.ticket ? 'bg-blue-50' : ''}`}>
                     <td className="px-4 py-4 font-mono text-sm font-bold">{row.permitNumber}</td>
                     <td className="px-4 py-4 font-black">{row.ticket}</td>
                     <td className="px-4 py-4">{row.submittedBy}</td>
@@ -1082,9 +1211,10 @@ function RegulatorReviewConsole() {
                 ))}
               </tbody>
             </table>
+            {filtered.length === 0 && <div className="p-8 text-center text-slate-500">No regulator records match the current filters for {reviewFilters.dateRange}.</div>}
           </div>
         </div>
-        <RegulatorDetailPanel row={selectedTicket} onClose={() => setSelectedTicket(null)} />
+        <RegulatorDetailPanel row={activeTicket} onClose={() => setSelectedTicket(null)} />
       </div>
     </section>
   );

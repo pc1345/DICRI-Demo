@@ -31,13 +31,28 @@ import {
 } from 'lucide-react';
 
 const TABS = [
-  { id: 'overview', label: 'Segment Overview', icon: Route },
+  { id: 'overview', label: 'Dashboard', icon: Route },
   { id: 'assets', label: 'Managed Assets', icon: Database },
   { id: 'certificates', label: 'Certificates', icon: Award },
+  { id: 'scorecard', label: 'Scorecard Logic', icon: Gauge },
   { id: 'cbyd', label: 'CBYD Exposure', icon: Map },
   { id: 'alerts', label: 'Alerts / Notices', icon: Bell },
   { id: 'audit', label: 'Audit Trail', icon: History },
 ];
+
+const PORTAL_ORGANIZATIONS = ['Equinox Telecom', 'MTN Nigeria', 'National Fiber Corridor SPV', 'Lagos Metro Fiber Authority'];
+
+const PORTAL_ROLES = ['Executive Viewer', 'Infrastructure Administrator', 'Regional Operations Manager', 'Risk & Compliance Reviewer', 'Certification Liaison'];
+
+const PORTAL_USERS_BY_ROLE = {
+  'Executive Viewer': ['Adaeze Nwankwo', 'Tunde Balogun'],
+  'Infrastructure Administrator': ['Chinedu Okafor', 'Folake Mensah'],
+  'Regional Operations Manager': ['Maya Chen', 'Daniel Okafor'],
+  'Risk & Compliance Reviewer': ['Amina Bello', 'Nneka Usman'],
+  'Certification Liaison': ['Ifeoma Udo', 'Kelechi Nnamani'],
+};
+
+const PORTAL_REPORTING_WINDOWS = ['Last 30 days', 'Last 60 days', 'Last 90 days', 'All time'];
 
 const SEGMENTS = [
   {
@@ -269,15 +284,34 @@ const AUDIT_EVENTS = [
   { time: '2026-05-13 14:10', object: 'SEG-PH-TRA-002', event: 'Supplemental note requested', actor: 'Tiger Review Desk', status: 'Pending' },
 ];
 
+const SEGMENT_WINDOW_DAYS = {
+  'SEG-PH-ELK-001': 4,
+  'SEG-PH-TRA-002': 12,
+  'LAG-IKE-SEG-014': 28,
+  'SEG-PH-ABA-044': 46,
+  'SEG-PH-RUM-017': 78,
+};
+
 const INITIAL_FILTERS = {
   portfolio: 'All',
-  segmentId: 'SEG-PH-ELK-001',
+  segmentId: 'All',
   certificateType: 'All',
   status: 'All',
-  dateRange: '90 days',
+  dateRange: 'Last 30 days',
+};
+
+const INITIAL_PORTAL_LOGIN = {
+  organization: 'Equinox Telecom',
+  role: 'Executive Viewer',
+  user: PORTAL_USERS_BY_ROLE['Executive Viewer'][0],
+  password: '',
+  mfa: '',
 };
 
 export default function ClientPortalDemo() {
+  const [authenticated, setAuthenticated] = useState(false);
+  const [portalUser, setPortalUser] = useState(INITIAL_PORTAL_LOGIN);
+  const [loginForm, setLoginForm] = useState(INITIAL_PORTAL_LOGIN);
   const [activeTab, setActiveTab] = useState('overview');
   const [filters, setFilters] = useState(INITIAL_FILTERS);
   const [selectedSegmentId, setSelectedSegmentId] = useState(INITIAL_FILTERS.segmentId);
@@ -292,7 +326,8 @@ export default function ClientPortalDemo() {
       const segmentOk = filters.segmentId === 'All' || segment.id === filters.segmentId;
       const certOk = filters.certificateType === 'All' || segment.certificateType === filters.certificateType;
       const statusOk = filters.status === 'All' || segment.status === filters.status;
-      return portfolioOk && segmentOk && certOk && statusOk;
+      const dateOk = segmentInReportingWindow(segment, filters.dateRange);
+      return portfolioOk && segmentOk && certOk && statusOk && dateOk;
     });
   }, [filters]);
 
@@ -326,13 +361,31 @@ export default function ClientPortalDemo() {
     setModal({ type: 'notice', notice });
   };
 
+  const updateLoginField = (key, value) => {
+    setLoginForm((current) => {
+      if (key === 'role') {
+        return { ...current, role: value, user: PORTAL_USERS_BY_ROLE[value][0] };
+      }
+      return { ...current, [key]: value };
+    });
+  };
+
+  const authenticatePortal = () => {
+    setPortalUser(loginForm);
+    setAuthenticated(true);
+  };
+
+  if (!authenticated) {
+    return <PortalLoginScreen loginForm={loginForm} updateLoginField={updateLoginField} onAuthenticate={authenticatePortal} />;
+  }
+
   return (
     <div className="min-h-screen bg-[#020617] text-slate-100 font-sans antialiased">
-      <PortalHeader segment={selectedSegment} openModal={setModal} />
+      <PortalHeader segment={selectedSegment} openModal={setModal} portalUser={portalUser} />
 
       <div className="grid grid-cols-1 xl:grid-cols-[248px_1fr] min-h-[calc(100vh-76px)]">
         <aside className="bg-[#0B1120] border-r border-white/10 p-4 xl:p-5 space-y-4">
-          <AccountScopeCard />
+          <AccountScopeCard portalUser={portalUser} />
           <nav className="space-y-1.5">
             {TABS.map(({ id, label, icon: Icon }) => (
               <button
@@ -372,6 +425,9 @@ export default function ClientPortalDemo() {
               onSelectSegment={selectSegment}
               onOpenModal={setModal}
               onOpenNotice={openNotice}
+              onViewScoreLogic={() => setActiveTab('scorecard')}
+              reportingWindow={filters.dateRange}
+              totalSegments={SEGMENTS.filter((segment) => segmentInReportingWindow(segment, filters.dateRange)).length}
             />
           )}
 
@@ -399,6 +455,8 @@ export default function ClientPortalDemo() {
               />
             </SectionFrame>
           )}
+
+          {activeTab === 'scorecard' && <ScorecardLogic />}
 
           {activeTab === 'cbyd' && (
             <CBYDExposure
@@ -431,7 +489,88 @@ export default function ClientPortalDemo() {
   );
 }
 
-function PortalHeader({ segment, openModal }) {
+function segmentInReportingWindow(segment, window) {
+  if (window === 'All time') return true;
+  const maxDays = window === 'Last 60 days' ? 60 : window === 'Last 90 days' ? 90 : 30;
+  return (SEGMENT_WINDOW_DAYS[segment.id] || 999) <= maxDays;
+}
+
+function portalRoleBadge(role) {
+  if (role === 'Executive Viewer') return 'Executive View';
+  if (role === 'Risk & Compliance Reviewer') return 'Risk & Compliance View';
+  if (role === 'Infrastructure Administrator') return 'Administrator View';
+  if (role === 'Regional Operations Manager') return 'Operations View';
+  return 'Certification Liaison View';
+}
+
+function PortalLoginScreen({ loginForm, updateLoginField, onAuthenticate }) {
+  const users = PORTAL_USERS_BY_ROLE[loginForm.role] || PORTAL_USERS_BY_ROLE['Executive Viewer'];
+  return (
+    <div className="min-h-screen bg-[#020617] text-slate-100 font-sans antialiased grid place-items-center p-5">
+      <section className="w-full max-w-5xl overflow-hidden rounded-3xl border border-white/10 bg-[#08111f] shadow-2xl">
+        <div className="grid grid-cols-1 lg:grid-cols-[0.95fr_1.05fr]">
+          <div className="relative min-h-[420px] bg-[#071A33] p-8 md:p-10">
+            <div className="absolute inset-0 opacity-25">
+              <svg viewBox="0 0 620 480" className="h-full w-full">
+                <path d="M40 350 C160 250 240 270 350 180 S500 95 590 150" fill="none" stroke="#38BDF8" strokeWidth="22" strokeLinecap="round" />
+                <path d="M94 94 H540" stroke="#D4A100" strokeWidth="7" strokeDasharray="15 13" />
+                <path d="M180 48 V430" stroke="#22C55E" strokeWidth="7" strokeDasharray="12 14" />
+              </svg>
+            </div>
+            <div className="relative">
+              <DICRILogo />
+              <p className="mt-10 text-[10px] font-black uppercase tracking-[0.32em] text-blue-300">Secure Owner Access</p>
+              <h1 className="mt-4 text-4xl md:text-5xl font-black tracking-tight text-white">Infrastructure Owner Portal</h1>
+              <p className="mt-5 max-w-xl text-sm md:text-base leading-relaxed text-blue-100/80">
+                Secure access for authorized administrators, executives, and governance users reviewing certified infrastructure records, resilience posture, risk trends, and operational exceptions.
+              </p>
+              <div className="mt-8 inline-flex items-center gap-2 rounded-full border border-[#D4A100]/30 bg-[#D4A100]/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-amber-200">
+                <Lock size={14} />
+                Evidence-backed infrastructure governance
+              </div>
+            </div>
+          </div>
+          <div className="p-7 md:p-9">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <SelectField label="Organization / Client" value={loginForm.organization} onChange={(value) => updateLoginField('organization', value)} options={PORTAL_ORGANIZATIONS} />
+              <SelectField label="User Role" value={loginForm.role} onChange={(value) => updateLoginField('role', value)} options={PORTAL_ROLES} />
+              <SelectField label="Authorized User" value={loginForm.user} onChange={(value) => updateLoginField('user', value)} options={users} />
+              <div className="rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Role Context</p>
+                <p className="mt-1 text-sm font-black text-white">{portalRoleBadge(loginForm.role)}</p>
+              </div>
+              <SecureInput label="Password" value={loginForm.password} type="password" onChange={(value) => updateLoginField('password', value)} placeholder="Type anything for demo" />
+              <SecureInput label="MFA Code" value={loginForm.mfa} onChange={(value) => updateLoginField('mfa', value)} placeholder="Any demo code" />
+            </div>
+            <div className="mt-7 rounded-2xl border border-white/10 bg-slate-950/55 p-4 text-sm leading-relaxed text-slate-300">
+              Owner-side access is scoped to certified records, resilience posture, operational exceptions, and governance visibility. Sensitive field artifacts and exact route geometry remain redacted.
+            </div>
+            <button onClick={onAuthenticate} className="mt-7 w-full rounded-xl bg-blue-600 px-6 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-950/30 hover:bg-blue-500">
+              Authenticate
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SecureInput({ label, value, onChange, type = 'text', placeholder }) {
+  return (
+    <label className="block">
+      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{label}</span>
+      <input
+        value={value}
+        type={type}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 text-sm font-bold text-white outline-none transition focus:border-blue-500"
+      />
+    </label>
+  );
+}
+
+function PortalHeader({ segment, openModal, portalUser }) {
   return (
     <header className="min-h-[76px] bg-[#08111f] border-b border-white/10 px-4 md:px-6 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3 sticky top-0 z-40">
       <div className="flex items-center gap-4 min-w-0">
@@ -442,6 +581,8 @@ function PortalHeader({ segment, openModal }) {
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2.5">
+        <HeaderChip label="Portal Role" value={portalRoleBadge(portalUser.role)} />
+        <HeaderChip label="Organization" value={portalUser.organization} />
         <HeaderChip label="Active Segment" value={segment.id} />
         <HeaderChip label="ASCE Confidence" value={`${segment.asce} / ${segment.confidence}%`} />
         <button onClick={() => openModal({ type: 'access' })} className="rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-3 text-[11px] font-black uppercase tracking-widest text-white shadow-lg shadow-blue-950/30 flex items-center gap-2">
@@ -472,7 +613,7 @@ function DICRILogo() {
   );
 }
 
-function AccountScopeCard() {
+function AccountScopeCard({ portalUser }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 shadow-2xl">
       <div className="flex items-center gap-3">
@@ -480,12 +621,13 @@ function AccountScopeCard() {
           <Building2 size={21} />
         </div>
         <div>
-          <p className="text-sm font-black text-white">City Fiber Network</p>
+          <p className="text-sm font-black text-white">{portalUser.organization}</p>
           <p className="text-[10px] font-bold uppercase tracking-widest text-blue-400 mt-1">Asset Owner</p>
         </div>
       </div>
       <div className="mt-4 grid grid-cols-1 gap-2">
-        <CompactInfo label="Role" value="Portfolio Viewer" />
+        <CompactInfo label="Role" value={portalRoleBadge(portalUser.role)} />
+        <CompactInfo label="Authorized User" value={portalUser.user} />
         <CompactInfo label="Scope" value="Managed summaries" />
         <CompactInfo label="Sensitive Details" value="Redacted" tone="amber" />
       </div>
@@ -502,7 +644,7 @@ function FilterBar({ filters, selectedSegment, updateFilter, reset }) {
           <SelectField label="Segment" value={filters.segmentId} onChange={(value) => updateFilter('segmentId', value)} options={['All', ...SEGMENTS.map((segment) => segment.id)]} />
           <SelectField label="Certificate" value={filters.certificateType} onChange={(value) => updateFilter('certificateType', value)} options={['All', 'Birth Certificate', 'Health Certificate', 'Pre-Certification']} />
           <SelectField label="Status" value={filters.status} onChange={(value) => updateFilter('status', value)} options={['All', 'Active', 'In Review', 'Quarantine', 'Pre-Cert']} />
-          <SelectField label="Date Range" value={filters.dateRange} onChange={(value) => updateFilter('dateRange', value)} options={['30 days', '90 days', '12 months']} />
+          <SelectField label="Reporting Window" value={filters.dateRange} onChange={(value) => updateFilter('dateRange', value)} options={PORTAL_REPORTING_WINDOWS} />
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <div className="hidden lg:block rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3">
@@ -516,17 +658,39 @@ function FilterBar({ filters, selectedSegment, updateFilter, reset }) {
   );
 }
 
-function SegmentOverview({ segments, selectedSegment, selectedNotices, avgIntegrity, reviewedNotices, onSelectSegment, onOpenModal, onOpenNotice }) {
+function SegmentOverview({ segments, selectedSegment, selectedNotices, avgIntegrity, reviewedNotices, onSelectSegment, onOpenModal, onOpenNotice, onViewScoreLogic, reportingWindow, totalSegments }) {
   const certifiedCount = segments.filter((segment) => segment.certNo !== 'Not Issued').length;
-  const watchlistCount = segments.filter((segment) => ['High', 'Medium', 'Moderate'].includes(segment.risk)).length;
+  const underReviewCount = segments.filter((segment) => ['In Review', 'Pre-Cert'].includes(segment.status)).length;
+  const avgConfidence = segments.length ? segments.reduce((sum, segment) => sum + segment.confidence, 0) / segments.length : 0;
+  const avgResilience = segments.length ? segments.reduce((sum, segment) => sum + (segment.resilienceScore || 0), 0) / segments.length : 0;
+  const highRiskCount = segments.filter((segment) => segment.risk === 'High').length;
+  const openExceptions = segments.reduce((sum, segment) => sum + segment.exceptions, 0);
+  const pendingReviews = segments.filter((segment) => ['In Review', 'Pre-Cert'].includes(segment.status) || segment.certificateStatus === 'Under Review').length;
+  const expiringSoon = segments.filter((segment) => segment.certNo !== 'Not Issued' && segment.certificateReviewDate !== 'Pending' && segment.certificateReviewDate !== 'Under exception review').length;
+  const recentTrend = selectedSegment.trend.at(-1) - selectedSegment.trend.at(-2);
+  const trendLabel = recentTrend > 1 ? 'Improving' : recentTrend < -1 ? 'Declining' : 'Stable';
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <MetricCard icon={Layers} label="Visible Segments" value={segments.length} trend={`${watchlistCount} watch`} tone="blue" />
-        <MetricCard icon={Award} label="Active Certificates" value={certifiedCount} trend="Governed" tone="green" />
-        <MetricCard icon={Gauge} label="Avg Integrity" value={avgIntegrity ? `${avgIntegrity.toFixed(1)}%` : 'Pending'} trend={`${selectedSegment.asce} ASCE`} tone="teal" />
-        <MetricCard icon={Shield} label="Resilience Grade" value={selectedSegment.resilience} trend={selectedSegment.custody} tone="gold" />
+      <div className="rounded-2xl border border-white/10 bg-slate-900/75 p-4 shadow-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-400">Executive Owner Dashboard</p>
+          <h2 className="mt-1 text-xl font-black text-white">Certification confidence and infrastructure resilience are tracked separately.</h2>
+          <p className="mt-1 text-xs text-slate-400">Reporting window: {reportingWindow}. Showing top {segments.length} of {totalSegments} records in the selected window.</p>
+        </div>
+        <GhostButton icon={Gauge} onClick={onViewScoreLogic}>View score logic</GhostButton>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-4">
+        <MetricCard icon={Award} label="Certified Segments" value={certifiedCount} trend={reportingWindow} tone="green" />
+        <MetricCard icon={Clock} label="Segments Under Review" value={underReviewCount} trend={reportingWindow} tone="gold" />
+        <MetricCard icon={Shield} label="Average Certification Confidence" value={avgConfidence ? `${avgConfidence.toFixed(1)}%` : 'Pending'} trend="Record trust" tone="blue" />
+        <MetricCard icon={Gauge} label="Average Resilience Score" value={avgResilience ? `${avgResilience.toFixed(0)}/100` : 'Pending'} trend="Asset posture" tone="teal" />
+        <MetricCard icon={AlertTriangle} label="High-Risk Segments" value={highRiskCount} trend={reportingWindow} tone="gold" />
+        <MetricCard icon={Bell} label="Open Exceptions" value={openExceptions} trend="Visible scope" tone="gold" />
+        <MetricCard icon={History} label="Pending DICRI Reviews" value={pendingReviews} trend="Independent review" tone="blue" />
+        <MetricCard icon={Calendar} label="Certificates Expiring Soon" value={expiringSoon} trend="Review planning" tone="green" />
+        <MetricCard icon={Activity} label="Regional Risk Trend" value={trendLabel} trend={selectedSegment.corridor} tone={recentTrend < -1 ? 'gold' : 'teal'} />
       </div>
 
       <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.7fr)_420px] gap-5 items-start">
@@ -540,7 +704,7 @@ function SegmentOverview({ segments, selectedSegment, selectedNotices, avgIntegr
             <MapContextPanel segment={selectedSegment} onOpenModal={onOpenModal} />
             <SectionFrame
               title="Certificates"
-              subtitle="Current records for displayed segment scope."
+              subtitle={`Current records for displayed segment scope. Showing top ${segments.filter((segment) => segment.certNo !== 'Not Issued').length} of ${certifiedCount}.`}
               action={<GhostButton icon={Download} onClick={() => onOpenModal({ type: 'export', segment: selectedSegment })}>Export Summary</GhostButton>}
               compact
             >
@@ -552,7 +716,7 @@ function SegmentOverview({ segments, selectedSegment, selectedNotices, avgIntegr
             </SectionFrame>
           </div>
 
-          <SectionFrame title="Managed Segments" subtitle="Rows update the active segment panel." compact>
+          <SectionFrame title="Managed Segments" subtitle={`Rows update the active segment panel. Showing top ${segments.length} of ${totalSegments} records for ${reportingWindow}.`} compact>
             <SegmentTable
               data={segments}
               selectedId={selectedSegment.id}
@@ -714,6 +878,152 @@ function CertificateTable({ data, onOpen, compact }) {
         </tbody>
       </table>
       {data.length === 0 && <div className="p-6 text-center text-sm text-slate-500">No certificates in this scope yet.</div>}
+    </div>
+  );
+}
+
+const SCORECARD_CATEGORIES = [
+  {
+    category: 'Physical Protection',
+    weight: '30 pts',
+    measures: 'Burial depth, hardened conduit, vault / handhole locking, concrete capping, and protective backfill.',
+    evidence: 'Depth profile, photo record, GIS alignment, trusted worker/device capture, and WORM/hash verified packet.',
+    bands: [
+      'Verified burial depth >= 1.2m across required points: full depth credit.',
+      '1.0m-1.19m with documented exception: partial credit / warning.',
+      '0.75m-0.99m: reduced credit / mitigation required.',
+      '< 0.75m: high-risk flag / no depth credit unless approved exception.',
+    ],
+  },
+  {
+    category: 'Detection & Monitoring',
+    weight: '20 pts',
+    measures: 'Lid / tilt intrusion sensors, flood sensors, closure alarms, and NOC alert integration.',
+    evidence: 'Sensor registry, device event history, NOC integration evidence, and inspection artifacts.',
+    bands: [
+      'Lid/tilt sensor + flood sensor + NOC integration: full credit.',
+      'Sensor present but not integrated: partial credit.',
+      'Manual inspection only: low credit.',
+      'No detection evidence: no credit.',
+    ],
+  },
+  {
+    category: 'Environmental Resilience',
+    weight: '15 pts',
+    measures: 'Flood exposure, drainage risk, water ingress protection, heat / soil / erosion exposure.',
+    evidence: 'Environmental exposure screen, field photos, drainage notes, and mitigation artifacts.',
+    bands: [
+      'Flood exposure mitigated with drainage/flood sensors: higher credit.',
+      'Known flood zone with partial mitigation: warning.',
+      'Flood-prone segment with no mitigation: high-risk flag.',
+    ],
+  },
+  {
+    category: 'Operational Protection',
+    weight: '15 pts',
+    measures: 'CBYD integration, dig-ticket governance, stakeholder notification, and locate response SLA.',
+    evidence: 'CBYD linkage, notification logs, SLA evidence, and governed exception history.',
+    bands: [
+      'CBYD integrated with notification/SLA tracking: full credit.',
+      'CBYD process documented but not automated: partial credit.',
+      'No dig-ticket governance evidence: reduced/no credit.',
+    ],
+  },
+  {
+    category: 'Route & Network Resilience',
+    weight: '10 pts',
+    measures: 'Route diversity, alternate path, and critical crossing protection.',
+    evidence: 'Redacted route topology evidence, crossing inventory, and alternate-path validation.',
+    bands: [
+      'Diverse route or alternate path available: higher credit.',
+      'Single path through critical corridor: lower credit.',
+      'Critical crossing with no redundancy: high-risk flag.',
+    ],
+  },
+  {
+    category: 'Documentation Quality',
+    weight: '10 pts',
+    measures: 'GIS accuracy, as-built completeness, evidence record integrity, and WORM / hash verification.',
+    evidence: 'GIS, photo, timestamp, worker, device, calibration, and trusted capture envelope.',
+    bands: [
+      'GIS, photo, timestamp, worker, device, calibration, and WORM/hash verified: full credit.',
+      'Minor evidence gaps but trusted location validated: partial credit.',
+      'Missing calibration or weak location validation: reduced credit.',
+      'No trusted capture envelope: fails confidence requirement.',
+    ],
+  },
+];
+
+function ScorecardLogic() {
+  return (
+    <section className="space-y-5">
+      <SectionFrame
+        title="DICRI Infrastructure Resilience Scorecard Logic"
+        subtitle="Evidence-backed scoring criteria for owner-side governance visibility. Certification confidence and infrastructure resilience remain separate measures."
+      >
+        <div className="p-5 grid grid-cols-1 xl:grid-cols-[1fr_0.8fr] gap-5">
+          <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-5">
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-400">Score Distinction</p>
+            <h3 className="mt-2 text-2xl font-black text-white">Two scores, two governance questions.</h3>
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <ScoreDefinition title="Certification Confidence Score" score="Record trust" text="How trustworthy is the record? This reflects worker identity, device trust, calibration validity, time/location validation, adjudication status, and WORM/hash verification." />
+              <ScoreDefinition title="Infrastructure Resilience Score" score="Asset posture" text="How resilient is the asset against known operational threats? This reflects physical protection, detection, environmental exposure, operational governance, route resilience, and documentation quality." />
+            </div>
+          </div>
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-5">
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-amber-200">Transparent Criteria</p>
+            <h3 className="mt-2 text-xl font-black text-white">100-point model</h3>
+            <p className="mt-3 text-sm leading-relaxed text-slate-300">The Infrastructure Resilience Score is calculated from documented, evidence-backed controls. Low scores identify mitigation required, not field-worker blame.</p>
+            <div className="mt-4 space-y-2">
+              {SCORECARD_CATEGORIES.map((item) => <ReportWeight key={item.category} label={item.category} value={item.weight} />)}
+            </div>
+          </div>
+        </div>
+      </SectionFrame>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        {SCORECARD_CATEGORIES.map((item) => (
+          <section key={item.category} className="rounded-2xl border border-white/10 bg-slate-900/75 p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-blue-400">Scoring Criteria</p>
+                <h3 className="mt-2 text-xl font-black text-white">{item.category}</h3>
+              </div>
+              <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-200">{item.weight}</span>
+            </div>
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <CompactInfo label="What It Measures" value={item.measures} wide />
+              <CompactInfo label="Evidence Required" value={item.evidence} wide />
+            </div>
+            <div className="mt-4 space-y-2">
+              {item.bands.map((band) => (
+                <div key={band} className="rounded-xl border border-white/10 bg-slate-950/50 p-3 text-xs leading-relaxed text-slate-300">
+                  {band}
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ScoreDefinition({ title, score, text }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{score}</p>
+      <h4 className="mt-2 font-black text-white">{title}</h4>
+      <p className="mt-2 text-xs leading-relaxed text-slate-400">{text}</p>
+    </div>
+  );
+}
+
+function ReportWeight({ label, value }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-950/50 px-4 py-3">
+      <span className="text-xs font-bold text-slate-300">{label}</span>
+      <span className="text-xs font-black text-white">{value}</span>
     </div>
   );
 }

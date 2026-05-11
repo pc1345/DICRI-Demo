@@ -86,15 +86,34 @@ const INTAKE_AGENCIES = [
   'Rivers Permit Office',
   'Lagos Infrastructure Coordination Office',
   'Abuja ROW Coordination Desk',
+  'NCC Regional Oversight Desk',
   'National Fiber Corridor Desk',
 ];
 
-const OFFICERS = [
-  { name: 'R. Okafor', id: 'RIV-INT-042' },
-  { name: 'A. Bello', id: 'LAG-INT-118' },
-  { name: 'M. Danladi', id: 'ABJ-INT-073' },
-  { name: 'T. Adeyemi', id: 'NFC-INT-025' },
-];
+const DEPARTMENT_OFFICERS = {
+  'Rivers Permit Office': [
+    { name: 'R. Okafor', id: 'RIV-INT-042' },
+    { name: 'C. Wike', id: 'RIV-INT-088' },
+  ],
+  'Lagos Infrastructure Coordination Office': [
+    { name: 'A. Bello', id: 'LAG-INT-118' },
+    { name: 'F. Balogun', id: 'LAG-INT-204' },
+  ],
+  'Abuja ROW Coordination Desk': [
+    { name: 'M. Danladi', id: 'ABJ-INT-073' },
+    { name: 'S. Ibrahim', id: 'ABJ-INT-112' },
+  ],
+  'NCC Regional Oversight Desk': [
+    { name: 'T. Adeyemi', id: 'NCC-REV-025' },
+    { name: 'N. Usman', id: 'NCC-REV-061' },
+  ],
+  'National Fiber Corridor Desk': [
+    { name: 'E. Nwosu', id: 'NFC-INT-031' },
+    { name: 'P. Musa', id: 'NFC-INT-066' },
+  ],
+};
+
+const OFFICERS = Object.values(DEPARTMENT_OFFICERS).flat();
 
 const REQUEST_CHANNELS = [
   'Assisted Intake',
@@ -446,18 +465,86 @@ const NOTIFICATIONS = [
   { id: 'N-3', intakeId: 'INT-040', title: 'CBYD screening ready for DICRI review', body: 'Packet has sufficient completeness for handoff review.', severity: 'Low' },
 ];
 
+const REGULATOR_ROWS = [
+  {
+    permitNumber: 'RIV-PER-2026-041',
+    ticket: 'CBYD-RIV-00042',
+    submittedBy: 'R. Okafor',
+    officerId: 'RIV-INT-042',
+    agency: 'Rivers Permit Office',
+    market: 'Nigeria / Rivers',
+    corridor: 'Garrison Junction to Elekahia Road',
+    conflicts: 4,
+    owners: ['Fiber Agency', 'Water Corporation', 'Power Distribution Co.', 'Drainage Dept.'],
+    notificationStatus: '3 acknowledged / 1 pending',
+    sla: 'Warning',
+    status: 'Under conflict review',
+    submittedDate: '2026-05-10 10:42',
+    feeBearing: 'Yes',
+  },
+  {
+    permitNumber: 'LAG-PER-2026-118',
+    ticket: 'CBYD-LAG-00118',
+    submittedBy: 'A. Bello',
+    officerId: 'LAG-INT-118',
+    agency: 'Lagos Infrastructure Coordination Office',
+    market: 'Nigeria / Lagos',
+    corridor: 'Ikeja CBD to Maryland Exchange',
+    conflicts: 2,
+    owners: ['Equinox Telecom', 'Water Corporation'],
+    notificationStatus: '2 acknowledged',
+    sla: 'On Track',
+    status: 'Cleared for conditional proceed',
+    submittedDate: '2026-05-09 14:20',
+    feeBearing: 'Yes',
+  },
+  {
+    permitNumber: 'ABJ-PER-2026-073',
+    ticket: 'CBYD-ABJ-00073',
+    submittedBy: 'M. Danladi',
+    officerId: 'ABJ-INT-073',
+    agency: 'Abuja ROW Coordination Desk',
+    market: 'Nigeria / FCT',
+    corridor: 'Central Business District Segment A',
+    conflicts: 5,
+    owners: ['Fiber Agency', 'Gas Utility', 'Power Distribution Co.', 'Water Board', 'Transport Authority'],
+    notificationStatus: '4 acknowledged / 1 escalated',
+    sla: 'Exception',
+    status: 'Escalated to regulator review',
+    submittedDate: '2026-05-08 09:15',
+    feeBearing: 'Yes',
+  },
+  {
+    permitNumber: 'NFC-PER-2026-031',
+    ticket: 'CBYD-NFC-00031',
+    submittedBy: 'E. Nwosu',
+    officerId: 'NFC-INT-031',
+    agency: 'National Fiber Corridor Desk',
+    market: 'Nigeria / Kano',
+    corridor: 'Kano Metro Ring Segment 2',
+    conflicts: 1,
+    owners: ['State Fiber Agency'],
+    notificationStatus: 'Pending',
+    sla: 'On Track',
+    status: 'Awaiting owner response',
+    submittedDate: '2026-05-07 16:35',
+    feeBearing: 'Yes',
+  },
+];
+
 const NEW_INTAKE_TEMPLATE = { ...INTAKES[0], id: 'INT-NEW', packetId: 'CBYD-INT-DRAFT', requester: 'New Requester', completeness: 34, status: 'Draft Intake Request', permitRef: 'TBD', contact: 'Unassigned', email: 'pending@example.demo', phone: 'Pending', attachments: 0 };
 
 export default function GovernmentIntakeDemo() {
   const [countryName, setCountryName] = useState('Nigeria');
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [mode, setMode] = useState('dashboard');
+  const [mode, setMode] = useState('landing');
   const [step, setStep] = useState(1);
   const [selectedPacket, setSelectedPacket] = useState(INTAKES[0]);
   const [filters, setFilters] = useState({ search: '', state: 'All', category: 'All', status: 'All' });
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [modal, setModal] = useState(null);
   const [permitSearch, setPermitSearch] = useState('');
+  const [authForm, setAuthForm] = useState(() => makeAuthForm('Rivers Permit Office'));
 
   const country = COUNTRIES[countryName];
   const countryRecords = INTAKES.filter((record) => record.country === countryName);
@@ -473,7 +560,7 @@ export default function GovernmentIntakeDemo() {
     setCountryName(name);
     setSelectedPacket(firstRecord);
     setFilters({ search: '', state: 'All', category: 'All', status: 'All' });
-    setMode('dashboard');
+    setMode('landing');
     setActiveTab('dashboard');
     setStep(1);
   };
@@ -486,13 +573,31 @@ export default function GovernmentIntakeDemo() {
   };
 
   const openDashboard = () => {
-    setMode('dashboard');
+    setMode('landing');
     setActiveTab('dashboard');
     setStep(1);
   };
 
   const openNewIntake = () => {
-    setSelectedPacket({ ...NEW_INTAKE_TEMPLATE, country: countryName, state: availableRegions[0], agency: INTAKE_AGENCIES[0], channel: REQUEST_CHANNELS[0], completeness: STEP_COMPLETENESS[1] });
+    setAuthForm(makeAuthForm('Rivers Permit Office'));
+    setMode('intake-auth');
+    setActiveTab('intakes');
+    setStep(1);
+  };
+
+  const authenticateIntake = () => {
+    const [country, state] = marketForAgency(authForm.agency).split(' / ');
+    setCountryName(country);
+    setSelectedPacket({
+      ...NEW_INTAKE_TEMPLATE,
+      country,
+      state,
+      agency: authForm.agency,
+      officer: authForm.officer,
+      officerId: authForm.officerId,
+      channel: 'Assisted Intake',
+      completeness: STEP_COMPLETENESS[1],
+    });
     setMode('intake');
     setActiveTab('intakes');
     setStep(1);
@@ -537,6 +642,15 @@ export default function GovernmentIntakeDemo() {
   const backStep = () => setStep((current) => Math.max(current - 1, 1));
 
   const renderMain = () => {
+    if (mode === 'landing') {
+      return <CBYDLanding onStartIntake={openNewIntake} onOpenReview={() => setMode('review')} />;
+    }
+    if (mode === 'intake-auth') {
+      return <IntakeAuthPage authForm={authForm} setAuthForm={setAuthForm} onAuthenticate={authenticateIntake} onBack={() => setMode('landing')} />;
+    }
+    if (mode === 'review') {
+      return <RegulatorReviewConsole />;
+    }
     if (mode === 'intake') {
       return (
         <IntakeWorkflow
@@ -596,13 +710,133 @@ export default function GovernmentIntakeDemo() {
           setNotificationOpen(false);
         }}
       />
-      <div className="grid grid-cols-[260px_1fr_340px] min-h-[calc(100vh-76px)]">
-        <SideRail step={mode === 'intake' ? step : 1} onStepClick={(n) => { setMode('intake'); setActiveTab('intakes'); setStep(n); }} />
-        <main className="min-w-0 p-6 pb-24">{renderMain()}</main>
-        <SnapshotPanel packet={workflowPacket} mode={mode} step={step} />
-      </div>
+      {['landing', 'intake-auth', 'review'].includes(mode) ? (
+        <main className="min-h-[calc(100vh-76px)] p-6">{renderMain()}</main>
+      ) : (
+        <div className="grid grid-cols-[260px_1fr_340px] min-h-[calc(100vh-76px)]">
+          <SideRail step={mode === 'intake' ? step : 1} onStepClick={(n) => { setMode('intake'); setActiveTab('intakes'); setStep(n); }} />
+          <main className="min-w-0 p-6 pb-24">{renderMain()}</main>
+          <SnapshotPanel packet={workflowPacket} mode={mode} step={step} />
+        </div>
+      )}
       {modal && <DetailModal modal={modal} close={() => setModal(null)} />}
     </div>
+  );
+}
+
+function CBYDLanding({ onStartIntake, onOpenReview }) {
+  return (
+    <section className="min-h-[calc(100vh-124px)] rounded-3xl border border-white/10 bg-[#071A33] text-white shadow-2xl overflow-hidden">
+      <div className="relative p-8 md:p-12">
+        <div className="absolute inset-0 opacity-20">
+          <svg viewBox="0 0 900 420" className="h-full w-full">
+            <path d="M40 310 C180 210 310 250 440 170 S690 92 860 150" fill="none" stroke="#22C55E" strokeWidth="26" strokeLinecap="round" />
+            <path d="M110 80 H810" stroke="#3B82F6" strokeWidth="8" strokeDasharray="16 14" />
+            <path d="M250 50 V380" stroke="#D4A100" strokeWidth="7" strokeDasharray="12 14" />
+          </svg>
+        </div>
+        <div className="relative max-w-5xl">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#D4A100]/30 bg-[#D4A100]/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.28em] text-amber-200">
+            Nigerian Government CBYD Oversight
+          </div>
+          <h1 className="mt-6 text-5xl font-black tracking-tight">Call Before You Dig Governance Portal</h1>
+          <p className="mt-4 max-w-3xl text-lg leading-relaxed text-blue-100/80">
+            Secure intake, conflict screening, stakeholder notification, and regulator visibility for excavation activity.
+          </p>
+        </div>
+
+        <div className="relative mt-10 grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <RoleAccessCard
+            icon={ClipboardCheck}
+            title="New Intake"
+            description="For authorized intake personnel creating or processing excavation and dig-notice requests."
+            button="Start New Intake"
+            onClick={onStartIntake}
+          />
+          <RoleAccessCard
+            icon={Shield}
+            title="Regulator Review"
+            description="For authorized regulators and oversight users reviewing submitted CBYD activity, permit linkage, conflict screening, notifications, and status."
+            button="Open Review Console"
+            onClick={onOpenReview}
+            accent="gold"
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RoleAccessCard({ icon: Icon, title, description, button, onClick, accent = 'blue' }) {
+  const accentClass = accent === 'gold' ? 'border-[#D4A100]/35 bg-[#D4A100]/10 text-amber-200' : 'border-blue-400/30 bg-blue-500/10 text-blue-200';
+  return (
+    <article className="rounded-3xl border border-white/10 bg-slate-950/55 p-6 md:p-7 shadow-2xl">
+      <div className={`h-14 w-14 rounded-2xl border flex items-center justify-center ${accentClass}`}>
+        <Icon size={26} />
+      </div>
+      <h2 className="mt-6 text-2xl font-black text-white">{title}</h2>
+      <p className="mt-3 min-h-[72px] text-sm leading-relaxed text-slate-300">{description}</p>
+      <button onClick={onClick} className="mt-6 rounded-xl bg-[#D4A100] px-6 py-3 text-sm font-black uppercase tracking-widest text-white shadow-lg hover:bg-[#b98d00]">
+        {button}
+      </button>
+    </article>
+  );
+}
+
+function IntakeAuthPage({ authForm, setAuthForm, onAuthenticate, onBack }) {
+  const officers = DEPARTMENT_OFFICERS[authForm.agency] || DEPARTMENT_OFFICERS[INTAKE_AGENCIES[0]];
+  const updateAgency = (agency) => setAuthForm(makeAuthForm(agency));
+  const updateOfficer = (name) => {
+    const officer = officers.find((item) => item.name === name) || officers[0];
+    setAuthForm((current) => ({ ...current, officer: officer.name, officerId: officer.id }));
+  };
+  return (
+    <section className="min-h-[calc(100vh-124px)] grid place-items-center rounded-3xl border border-white/10 bg-[#071A33] p-6 text-white shadow-2xl">
+      <div className="w-full max-w-3xl rounded-3xl border border-white/10 bg-slate-950/65 p-7 md:p-9 shadow-2xl">
+        <div className="flex items-start justify-between gap-5">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.32em] text-blue-300">Secure Government Access</p>
+            <h1 className="mt-3 text-4xl font-black tracking-tight">Authorized Intake Access</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-300">Authenticate as an approved intake officer before creating or processing a CBYD request.</p>
+          </div>
+          <div className="hidden md:flex h-16 w-16 items-center justify-center rounded-2xl border border-[#D4A100]/30 bg-[#D4A100]/10 text-amber-200"><Shield size={30} /></div>
+        </div>
+
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <DarkSelect label="Department / Agency" value={authForm.agency} options={INTAKE_AGENCIES} onChange={updateAgency} />
+          <DarkSelect label="Intake Officer" value={authForm.officer} options={officers.map((officer) => officer.name)} onChange={updateOfficer} />
+          <DarkField label="Officer ID" value={authForm.officerId} readOnly />
+          <DarkField label="Password" value={authForm.password} type="password" onChange={(password) => setAuthForm((current) => ({ ...current, password }))} placeholder="Type anything for demo" />
+          <DarkField label="MFA Code" value={authForm.mfa} onChange={(mfa) => setAuthForm((current) => ({ ...current, mfa }))} placeholder="Any demo code" />
+          <DarkField label="Default Market / Region" value={marketForAgency(authForm.agency)} readOnly />
+        </div>
+
+        <div className="mt-8 flex flex-wrap justify-between gap-3">
+          <button onClick={onBack} className="rounded-xl border border-white/15 px-6 py-3 text-xs font-black uppercase tracking-widest text-slate-200 hover:bg-white/10">Back</button>
+          <button onClick={onAuthenticate} className="rounded-xl bg-[#D4A100] px-7 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg hover:bg-[#b98d00]">Authenticate</button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function DarkSelect({ label, value, options, onChange }) {
+  return (
+    <label className="block">
+      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="mt-2 min-h-[48px] w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm font-bold text-white outline-none focus:border-blue-400">
+        {options.map((option) => <option key={option}>{option}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function DarkField({ label, value, onChange, readOnly, type = 'text', placeholder }) {
+  return (
+    <label className="block">
+      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+      <input value={value || ''} readOnly={readOnly} type={type} placeholder={placeholder} onChange={(event) => onChange?.(event.target.value)} className="mt-2 min-h-[48px] w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm font-bold text-white outline-none focus:border-blue-400" />
+    </label>
   );
 }
 
@@ -723,6 +957,8 @@ function SnapshotPanel({ packet, mode, step }) {
       <h3 className="flex items-center gap-2 text-lg font-black mb-6"><FileText size={19} /> Intake Snapshot</h3>
       <div className="space-y-5">
         <SnapshotItem label="Selected Intake" value={packet.id} />
+        <SnapshotItem label="Intake Agency / Office" value={packet.agency} />
+        <SnapshotItem label="Intake Officer" value={`${packet.officer} / ${packet.officerId}`} />
         <SnapshotItem label="Market / Region" value={`${packet.country} / ${packet.state}`} />
         <SnapshotItem label="Status" value={status} badge tone={status === 'Submitted to DICRI' || status === 'Ready for Review' ? 'green' : status === 'Needs Clarification' ? 'red' : 'amber'} />
         <SnapshotItem label="Ground Disturbance" value={packet.groundDisturbance} badge tone={packet.groundDisturbance === 'Yes' ? 'green' : 'amber'} />
@@ -769,6 +1005,124 @@ function Dashboard({ records, filteredRecords, countryName, onOpenQueue, onOpen,
         </div>
       </Card>
     </section>
+  );
+}
+
+function RegulatorReviewConsole() {
+  const [reviewFilters, setReviewFilters] = useState({ search: '', market: 'All', status: 'All', dateRange: '30 days' });
+  const [selectedTicket, setSelectedTicket] = useState(REGULATOR_ROWS[0]);
+  const filtered = REGULATOR_ROWS.filter((row) => {
+    const search = reviewFilters.search.toLowerCase();
+    const searchOk = !search || [row.permitNumber, row.ticket, row.submittedBy, row.corridor].join(' ').toLowerCase().includes(search);
+    const marketOk = reviewFilters.market === 'All' || row.market === reviewFilters.market;
+    const statusOk = reviewFilters.status === 'All' || row.status === reviewFilters.status;
+    return searchOk && marketOk && statusOk;
+  });
+  const metrics = [
+    ['Submitted CBYD Tickets', 42, ClipboardCheck, 'blue'],
+    ['Permits Linked', 36, FileText, 'green'],
+    ['Conflicts Detected', 18, AlertTriangle, 'amber'],
+    ['Notifications Issued', 91, Bell, 'blue'],
+    ['SLA Exceptions', 5, Clock, 'red'],
+    ['Fee-Bearing Events', 34, Database, 'green'],
+  ];
+  return (
+    <section className="space-y-6">
+      <div className="rounded-3xl border border-white/10 bg-[#071A33] p-7 text-white shadow-2xl">
+        <p className="text-[10px] font-black uppercase tracking-[0.32em] text-blue-300">Authorized Oversight</p>
+        <h1 className="mt-3 text-4xl font-black tracking-tight">Regulator Review Console</h1>
+        <p className="mt-3 max-w-4xl text-sm leading-relaxed text-blue-100/80">Permit-linked CBYD activity, conflict screening records, stakeholder notifications, and audit status.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-6 gap-4">
+        {metrics.map(([label, value, Icon, tone]) => <KpiCard key={label} label={label} value={value} sub="Oversight" tone={tone} icon={Icon} />)}
+      </div>
+
+      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_420px] gap-5 items-start">
+        <div className="space-y-5 min-w-0">
+          <Card title="Regulatory Visibility" icon={Shield}>
+            <p className="text-sm leading-relaxed text-slate-700">
+              This view gives authorized oversight users visibility into permit-linked CBYD activity, intake volumes, conflict screening, stakeholder notifications, SLA status, and audit history. It supports transparent governance of excavation activity and PPP-linked reporting.
+            </p>
+          </Card>
+          <Card title="Review Filters" icon={Filter}>
+            <div className="grid grid-cols-5 gap-3">
+              <EditableField label="Permit Number / CBYD Ticket" value={reviewFilters.search} onChange={(search) => setReviewFilters((current) => ({ ...current, search }))} />
+              <ControlledSelect label="Market / Region" value={reviewFilters.market} options={['All', ...MARKET_REGIONS]} onChange={(market) => setReviewFilters((current) => ({ ...current, market }))} />
+              <ControlledSelect label="Status" value={reviewFilters.status} options={['All', ...new Set(REGULATOR_ROWS.map((row) => row.status))]} onChange={(status) => setReviewFilters((current) => ({ ...current, status }))} />
+              <ControlledSelect label="Date Range" value={reviewFilters.dateRange} options={['7 days', '30 days', '90 days']} onChange={(dateRange) => setReviewFilters((current) => ({ ...current, dateRange }))} />
+              <div className="flex items-end"><button onClick={() => setReviewFilters({ search: '', market: 'All', status: 'All', dateRange: '30 days' })} className="min-h-[46px] w-full rounded-lg border border-[#001B3D] px-4 py-3 font-black hover:bg-slate-50">Reset</button></div>
+            </div>
+          </Card>
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
+            <table className="w-full min-w-[1280px] text-left">
+              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                <tr>
+                  {['Permit Number', 'CBYD Ticket', 'Submitted By', 'Department / Agency', 'Market / Region', 'Corridor / Location', 'Conflicts Detected', 'Asset Owners Notified', 'Notification Status', 'SLA Status', 'Current Status', 'Submitted Date'].map((header) => <th key={header} className="px-4 py-3">{header}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {filtered.map((row) => (
+                  <tr key={row.ticket} onClick={() => setSelectedTicket(row)} className={`cursor-pointer hover:bg-slate-50 ${selectedTicket.ticket === row.ticket ? 'bg-blue-50' : ''}`}>
+                    <td className="px-4 py-4 font-mono text-sm font-bold">{row.permitNumber}</td>
+                    <td className="px-4 py-4 font-black">{row.ticket}</td>
+                    <td className="px-4 py-4">{row.submittedBy}</td>
+                    <td className="px-4 py-4">{row.agency}</td>
+                    <td className="px-4 py-4">{row.market}</td>
+                    <td className="px-4 py-4">{row.corridor}</td>
+                    <td className="px-4 py-4">{row.conflicts}</td>
+                    <td className="px-4 py-4 text-sm">{row.owners.join(', ')}</td>
+                    <td className="px-4 py-4">{row.notificationStatus}</td>
+                    <td className="px-4 py-4"><StatusBadge status={row.sla} /></td>
+                    <td className="px-4 py-4">{row.status}</td>
+                    <td className="px-4 py-4">{row.submittedDate}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <RegulatorDetailPanel row={selectedTicket} />
+      </div>
+    </section>
+  );
+}
+
+function RegulatorDetailPanel({ row }) {
+  const audit = [
+    `Intake created by ${row.submittedBy} - ${row.submittedDate}`,
+    'Corridor screened - 2026-05-10 10:44',
+    `${row.conflicts} likely asset owners identified - 2026-05-10 10:45`,
+    'Notifications issued - 2026-05-10 10:46',
+    `${row.owners[1] || row.owners[0]} acknowledged - 2026-05-10 11:12`,
+    row.sla === 'Warning' || row.sla === 'Exception' ? 'Pending owner response - SLA warning active' : 'Stakeholder response remains on track',
+    'Packet submitted to DICRI Operations - 2026-05-10 11:30',
+  ];
+  return (
+    <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sticky top-24">
+      <h2 className="text-xl font-black mb-4">Review Detail</h2>
+      <div className="grid grid-cols-2 gap-3">
+        <SnapshotItem label="Permit Number" value={row.permitNumber} />
+        <SnapshotItem label="CBYD Ticket" value={row.ticket} />
+        <SnapshotItem label="Submitted By" value={row.submittedBy} />
+        <SnapshotItem label="Officer ID" value={row.officerId} />
+        <SnapshotItem label="Department / Agency" value={row.agency} />
+        <SnapshotItem label="Submission Timestamp" value={row.submittedDate} />
+        <SnapshotItem label="Corridor / Location" value={row.corridor} />
+        <SnapshotItem label="SLA Status" value={row.sla} badge tone={row.sla === 'Exception' ? 'red' : row.sla === 'Warning' ? 'amber' : 'green'} />
+        <SnapshotItem label="Fee-Bearing Event" value={row.feeBearing} badge tone="green" />
+      </div>
+      <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <h3 className="font-black mb-2">Conflict Screening Summary</h3>
+        <p className="text-sm text-slate-700">{row.conflicts} conflicts detected. Asset owners contacted: {row.owners.join(', ')}.</p>
+      </div>
+      <div className="mt-5">
+        <h3 className="font-black mb-3">Audit Trail Events</h3>
+        <div className="space-y-2">
+          {audit.map((item) => <div key={item} className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">{item}</div>)}
+        </div>
+      </div>
+    </aside>
   );
 }
 
@@ -941,8 +1295,14 @@ function IntakeWorkflow({ country, packet, step, nextStep, backStep, openDashboa
 
 function StepOne({ packet, updatePacket }) {
   const marketRegion = `${packet.country} / ${packet.state}`;
+  const departmentOfficers = DEPARTMENT_OFFICERS[packet.agency] || OFFICERS;
+  const updateAgency = (agency) => {
+    const firstOfficer = (DEPARTMENT_OFFICERS[agency] || OFFICERS)[0];
+    const [country, state] = marketForAgency(agency).split(' / ');
+    updatePacket({ agency, officer: firstOfficer.name, officerId: firstOfficer.id, country, state });
+  };
   const updateOfficer = (name) => {
-    const officer = OFFICERS.find((item) => item.name === name) || OFFICERS[0];
+    const officer = departmentOfficers.find((item) => item.name === name) || departmentOfficers[0];
     updatePacket({ officer: officer.name, officerId: officer.id });
   };
   const updateMarket = (value) => {
@@ -952,8 +1312,8 @@ function StepOne({ packet, updatePacket }) {
   return (
     <div className="space-y-4">
       <FormSection number="1" title="Intake Authority Details">
-        <ControlledSelect label="Intake Agency / Office" value={packet.agency} options={withCurrentOption(INTAKE_AGENCIES, packet.agency)} onChange={(agency) => updatePacket({ agency })} />
-        <ControlledSelect label="Intake Officer Name" value={packet.officer} options={withCurrentOption(OFFICERS.map((officer) => officer.name), packet.officer)} onChange={updateOfficer} />
+        <ControlledSelect label="Intake Agency / Office" value={packet.agency} options={withCurrentOption(INTAKE_AGENCIES, packet.agency)} onChange={updateAgency} />
+        <ControlledSelect label="Intake Officer Name" value={packet.officer} options={withCurrentOption(departmentOfficers.map((officer) => officer.name), packet.officer)} onChange={updateOfficer} />
         <Field label="Intake Officer ID" value={packet.officerId} />
         <ControlledSelect label="Request Channel" value={packet.channel} options={withCurrentOption(REQUEST_CHANNELS, packet.channel)} onChange={(channel) => updatePacket({ channel })} />
         <ControlledSelect label="Market / Region" value={marketRegion} options={withCurrentOption(MARKET_REGIONS, marketRegion)} onChange={updateMarket} />
@@ -1344,7 +1704,15 @@ function Progress({ value, wide }) {
 }
 
 function StatusBadge({ status }) {
-  const cls = status === 'Ready for Review' || status === 'Low' ? 'bg-green-100 text-green-700' : status === 'Needs Clarification' || status === 'Draft Intake Request' || status === 'Medium' ? 'bg-amber-100 text-amber-700' : status === 'High' || status === 'Not CBYD' ? 'bg-red-100 text-red-700' : status === 'Submitted to DICRI' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700';
+  const cls = status === 'Ready for Review' || status === 'Low' || status === 'On Track'
+    ? 'bg-green-100 text-green-700'
+    : status === 'Needs Clarification' || status === 'Draft Intake Request' || status === 'Medium' || status === 'Warning'
+      ? 'bg-amber-100 text-amber-700'
+      : status === 'High' || status === 'Not CBYD' || status === 'Exception'
+        ? 'bg-red-100 text-red-700'
+        : status === 'Submitted to DICRI'
+          ? 'bg-blue-100 text-blue-700'
+          : 'bg-slate-100 text-slate-700';
   return <span className={`rounded-lg px-3 py-1 text-xs font-black ${cls}`}>{status}</span>;
 }
 
@@ -1387,6 +1755,18 @@ function filterRecords(records, filters) {
 
 function withCurrentOption(options, current) {
   return current && !options.includes(current) ? [current, ...options] : options;
+}
+
+function makeAuthForm(agency) {
+  const officers = DEPARTMENT_OFFICERS[agency] || DEPARTMENT_OFFICERS[INTAKE_AGENCIES[0]];
+  return { agency, officer: officers[0].name, officerId: officers[0].id, password: '', mfa: '' };
+}
+
+function marketForAgency(agency) {
+  if (agency.includes('Lagos')) return 'Nigeria / Lagos';
+  if (agency.includes('Abuja') || agency.includes('NCC')) return 'Nigeria / FCT';
+  if (agency.includes('National Fiber')) return 'Nigeria / Kano';
+  return 'Nigeria / Rivers';
 }
 
 function withWorkflowCompleteness(packet, mode, step) {

@@ -124,6 +124,15 @@ const REQUEST_CHANNELS = [
   'API / System Intake',
 ];
 
+const REQUESTER_TYPES = [
+  'Contractor',
+  'Utility Owner',
+  'Government Agency',
+  'Engineering Consultant',
+  'Field Vendor',
+  'Other',
+];
+
 const MARKET_REGIONS = [
   'Nigeria / Rivers',
   'Nigeria / Lagos',
@@ -140,6 +149,45 @@ const CORRIDOR_SUGGESTIONS = [
   'Abuja Central Corridor Segment A',
   'Lekki Phase 1 Fiber Corridor',
   'Kano Metro Ring Segment 2',
+];
+
+const SIDE_OF_ROAD_OPTIONS = [
+  'Unknown',
+  'Northbound',
+  'Southbound',
+  'Eastbound',
+  'Westbound',
+  'Both sides',
+  'Median / centerline',
+  'Not applicable',
+];
+
+const SCREENING_BUFFER_OPTIONS = ['Standard buffer', 'Side-specific buffer', 'Wider buffer applied', 'Narrow point buffer', 'Manual review buffer'];
+
+const LOCATION_SOURCE_OPTIONS = [
+  'Assisted intake / permit reference',
+  'Assisted intake / permit entry',
+  'Online portal submission',
+  'GIS import',
+  'Field office walk-in',
+  'API / system intake',
+];
+
+const START_WINDOW_OPTIONS = [
+  'Within 48 hours',
+  'Within 7 days',
+  'Within 14 days',
+  'Within 21 days',
+  'More than 21 days',
+];
+
+const TRAFFIC_IMPACT_OPTIONS = [
+  'No traffic impact',
+  'Shoulder / verge work',
+  'Single-lane managed works',
+  'Multi-lane restriction',
+  'Full road closure',
+  'Emergency works',
 ];
 
 const STEP_COMPLETENESS = {
@@ -185,13 +233,23 @@ const INTAKES = [
     workAreaType: 'Linear Corridor',
     groundDisturbance: 'Yes',
     warning: 'Side of road unknown; wider screening buffer may be applied.',
+    estimatedLength: '2.4 km',
+    screeningBuffer: 'Wider buffer applied',
+    sideOfRoad: 'Unknown',
+    locationSource: 'Assisted intake / permit entry',
+    corridorStartPoint: 'Garrison Junction',
+    corridorEndPoint: 'Elekahia Road',
+    corridorCity: 'Port Harcourt',
+    corridorLga: 'Port Harcourt',
+    sketchFileName: '',
+    sketchUnavailable: false,
     likelyOwners: [
-      { name: 'State Fiber Agency', type: 'Fiber', response: 'Pending', sla: '21h', risk: 'Medium' },
-      { name: 'Water Corporation', type: 'Water', response: 'Acknowledged', sla: 'Closed', risk: 'Low' },
-      { name: 'Power Distribution Company', type: 'Power', response: 'Pending', sla: '18h', risk: 'Medium' },
-      { name: 'Municipal Drainage Department', type: 'Drainage', response: 'Required', sla: '12h', risk: 'High' },
+      { name: 'State Fiber Agency', type: 'Fiber', response: 'Pending', sla: '12h', risk: 'High', reason: 'Direct corridor conflict' },
+      { name: 'Municipal Sewer Department', type: 'Sewer', response: 'Required', sla: '12h', risk: 'High', reason: 'Crosses screening buffer' },
+      { name: 'Gas Utility', type: 'Gas', response: 'Notified', sla: '24h', risk: 'Low', reason: 'Nearby, outside conflict zone' },
+      { name: 'Water Corporation', type: 'Water', response: 'Acknowledged', sla: 'Closed', risk: 'Low', reason: 'Offset from declared corridor' },
     ],
-    permitRef: 'PHT-DR-2218',
+    permitRef: 'DD452-234',
     contact: 'Emeka Nwosu',
     email: 'emeka.nwosu@deltacivil.demo',
     phone: '+234 802 123 4567',
@@ -535,6 +593,37 @@ const REGULATOR_ROWS = [
 
 const REGULATOR_WINDOW_OPTIONS = ['Last 30 days', 'Last 60 days', 'Last 90 days', 'All time'];
 
+const REGULATOR_DATE_OPTIONS = ['Last 30 Days', 'Last 90 Days', 'Custom'];
+
+const STATE_LGAS = {
+  'All States': ['All LGAs'],
+  Rivers: ['All LGAs', 'Port Harcourt', 'Obio-Akpor', 'Eleme'],
+  Lagos: ['All LGAs', 'Ikeja', 'Eti-Osa', 'Lagos Mainland'],
+  FCT: ['All LGAs', 'Abuja Municipal', 'Gwagwalada', 'Bwari'],
+  Kano: ['All LGAs', 'Kano Municipal', 'Fagge', 'Nasarawa'],
+  Oyo: ['All LGAs', 'Ibadan North', 'Ibadan South-West', 'Ogbomosho North'],
+  Ogun: ['All LGAs', 'Abeokuta South', 'Ifo', 'Sagamu'],
+};
+
+const REGULATOR_RECORD_TYPES = [
+  'All',
+  'CBYD Tickets',
+  'Permit-Linked',
+  'Conflicts',
+  'SLA Exceptions',
+  'Fee-Bearing Events',
+];
+
+const REGULATOR_TABS = [
+  ['dashboard', 'Dashboard'],
+  ['cbyd-records', 'CBYD Records'],
+  ['conflicts', 'Conflict Register'],
+  ['notifications', 'Notifications & SLA'],
+  ['linked-permits', 'Linked Permits'],
+  ['fee-events', 'Fee Events'],
+  ['reports', 'Reports / Audit Log'],
+];
+
 const REGULATOR_METRICS_BY_WINDOW = {
   'Last 30 days': { submitted: 5, permits: 4, conflicts: 3, notifications: 11, slaExceptions: 1, feeEvents: 4 },
   'Last 60 days': { submitted: 14, permits: 12, conflicts: 7, notifications: 31, slaExceptions: 2, feeEvents: 11 },
@@ -597,7 +686,7 @@ function regulatorMetricsForWindow(window) {
 function regulatorRowsForWindow(window) {
   const targetCount = regulatorMetricsForWindow(window).submitted;
   return Array.from({ length: targetCount }, (_, index) => {
-    if (REGULATOR_ROWS[index]) return REGULATOR_ROWS[index];
+    if (REGULATOR_ROWS[index]) return normalizeRegulatorRow(REGULATOR_ROWS[index], index);
 
     const profile = REGULATOR_SYNTHETIC_PROFILES[index % REGULATOR_SYNTHETIC_PROFILES.length];
     const serial = index + 41;
@@ -613,13 +702,15 @@ function regulatorRowsForWindow(window) {
           ? 'Cleared for conditional proceed'
           : 'Awaiting owner response';
 
-    return {
+    return normalizeRegulatorRow({
       permitNumber: `${profile.code}-PER-2026-${String(serial).padStart(3, '0')}`,
       ticket: `CBYD-${profile.code}-${String(serial).padStart(5, '0')}`,
+      requester: ['Delta Civil Works Ltd.', 'UrbanLink Contractors', 'Metro Utility Works', 'NorthGrid Fiber Services', 'State Corridor Works'][index % 5],
       submittedBy: profile.submittedBy,
       officerId: profile.officerId,
       agency: profile.agency,
       market: profile.market,
+      lga: lgaForMarket(profile.market, index),
       corridor: profile.corridor,
       conflicts,
       owners: profile.owners,
@@ -628,11 +719,60 @@ function regulatorRowsForWindow(window) {
       status,
       submittedDate: `2026-05-${day} ${hour}:20`,
       feeBearing: index % 5 === 0 ? 'No' : 'Yes',
-    };
+    }, index);
   });
 }
 
-const NEW_INTAKE_TEMPLATE = { ...INTAKES[0], id: 'INT-NEW', packetId: 'CBYD-INT-DRAFT', requester: 'New Requester', completeness: 34, status: 'Draft Intake Request', permitRef: 'TBD', contact: 'Unassigned', email: 'pending@example.demo', phone: 'Pending', attachments: 0 };
+function stateFromMarket(market) {
+  return market?.split(' / ')[1] || 'Rivers';
+}
+
+function lgaForMarket(market, index = 0) {
+  const state = stateFromMarket(market);
+  const lgas = (STATE_LGAS[state] || STATE_LGAS.Rivers).filter((item) => item !== 'All LGAs');
+  return lgas[index % lgas.length] || 'Port Harcourt';
+}
+
+function normalizeRegulatorRow(row, index = 0) {
+  const state = row.state || stateFromMarket(row.market);
+  return {
+    requester: row.requester || ['Delta Civil Works Ltd.', 'UrbanLink Contractors', 'Metro Utility Works', 'NorthGrid Fiber Services'][index % 4],
+    corridorRecordStatus: row.corridorRecordStatus || row.status,
+    assetScreeningStatus: row.assetScreeningStatus || (row.conflicts > 0 ? 'Conflicts detected' : 'No material conflict'),
+    responsePackageStatus: row.responsePackageStatus || (row.sla === 'Exception' ? 'Regulator review required' : 'Response package available'),
+    ...row,
+    state,
+    lga: row.lga || lgaForMarket(row.market, index),
+  };
+}
+
+function dateWindowForRegulatorFilter(dateRange) {
+  if (dateRange === 'Last 90 Days') return 'Last 90 days';
+  if (dateRange === 'Custom') return 'All time';
+  return 'Last 30 days';
+}
+
+function recordTypeMatches(row, recordType) {
+  if (recordType === 'All' || recordType === 'CBYD Tickets') return true;
+  if (recordType === 'Permit-Linked') return Boolean(row.permitNumber);
+  if (recordType === 'Conflicts') return row.conflicts > 0;
+  if (recordType === 'SLA Exceptions') return row.sla === 'Warning' || row.sla === 'Exception';
+  if (recordType === 'Fee-Bearing Events') return row.feeBearing === 'Yes';
+  return true;
+}
+
+function regulatorMetricsFromRows(rows) {
+  return {
+    submitted: rows.length,
+    permits: rows.filter((row) => row.permitNumber).length,
+    conflicts: rows.reduce((sum, row) => sum + row.conflicts, 0),
+    notifications: rows.reduce((sum, row) => sum + row.owners.length, 0),
+    slaExceptions: rows.filter((row) => row.sla === 'Warning' || row.sla === 'Exception').length,
+    feeEvents: rows.filter((row) => row.feeBearing === 'Yes').length,
+  };
+}
+
+const NEW_INTAKE_TEMPLATE = { ...INTAKES[0], id: 'INT-NEW', packetId: 'CBYD-INT-DRAFT', requester: 'New Requester', completeness: 34, status: 'Draft Intake Request', permitRef: 'TBD', contact: 'Unassigned', email: 'pending@example.demo', phone: 'Pending', attachments: 0, sketchFileName: '', sketchUnavailable: false };
 
 export default function GovernmentIntakeDemo() {
   const [countryName, setCountryName] = useState('Nigeria');
@@ -670,6 +810,18 @@ export default function GovernmentIntakeDemo() {
     setMode('intake');
     setActiveTab('intakes');
     setStep(targetStep);
+  };
+
+  const openApplication = (record) => {
+    setSelectedPacket(record);
+    setActiveTab('applications');
+    if (record.status === 'Draft Intake Request') {
+      setMode('intake');
+      setStep(2);
+      return;
+    }
+    setMode('application-detail');
+    setStep(1);
   };
 
   const openDashboard = () => {
@@ -718,11 +870,11 @@ export default function GovernmentIntakeDemo() {
   };
 
   const submitToDicri = () => {
-    setSelectedPacket((packet) => ({ ...packet, status: 'Submitted to DICRI', completeness: 100 }));
+    setSelectedPacket((packet) => ({ ...packet, status: 'Submitted to DICRI', completeness: submittedCompleteness(packet) }));
     setStep(10);
   };
 
-  const updatePacket = (patch) => setSelectedPacket((packet) => ({ ...packet, ...patch }));
+  const updatePacket = (patch) => setSelectedPacket((packet) => normalizePacketPatch(packet, patch));
 
   const toggleClassification = (classification) => {
     const exists = selectedPacket.classifications.includes(classification);
@@ -763,19 +915,7 @@ export default function GovernmentIntakeDemo() {
       return <IntakeAuthPage authForm={authForm} setAuthForm={setAuthForm} onAuthenticate={authenticateIntake} onBack={() => setMode('landing')} />;
     }
     if (mode === 'review') {
-      if (activeTab === 'intakes') {
-        return <IntakesPage countryName={countryName} records={filteredRecords} filters={filters} setFilters={setFilters} regions={availableRegions} categories={availableCategories} statuses={availableStatuses} onOpen={selectRecord} onNew={openNewIntake} />;
-      }
-      if (activeTab === 'applications') {
-        return <RegulatorApplicationsPage />;
-      }
-      if (activeTab === 'permits') {
-        return <RegulatorPermitsPage />;
-      }
-      if (activeTab === 'reports') {
-        return <RegulatorReportsPage />;
-      }
-      return <RegulatorReviewConsole onStartIntake={openNewIntake} />;
+      return <RegulatorReviewConsole activeTab={activeTab} onSwitchToIntake={openNewIntake} />;
     }
     if (mode === 'intake') {
       return (
@@ -794,11 +934,14 @@ export default function GovernmentIntakeDemo() {
         />
       );
     }
+    if (mode === 'application-detail') {
+      return <ApplicationPackageDetail packet={workflowPacket} onAmend={() => { setMode('intake'); setActiveTab('applications'); setStep(2); }} onBack={() => { setMode('dashboard'); setActiveTab('applications'); }} />;
+    }
     if (activeTab === 'intakes') {
       return <IntakesPage countryName={countryName} records={filteredRecords} filters={filters} setFilters={setFilters} regions={availableRegions} categories={availableCategories} statuses={availableStatuses} onOpen={selectRecord} onNew={openNewIntake} />;
     }
     if (activeTab === 'applications') {
-      return <ApplicationsPage records={countryRecords} onOpen={selectRecord} />;
+      return <ApplicationsPage records={countryRecords} onOpen={openApplication} />;
     }
     if (activeTab === 'permits') {
       return <PermitsPage records={countryRecords} search={permitSearch} setSearch={setPermitSearch} onOpen={selectRecord} />;
@@ -828,6 +971,7 @@ export default function GovernmentIntakeDemo() {
         openDashboard={openRoleDashboard}
         notificationOpen={notificationOpen}
         setNotificationOpen={setNotificationOpen}
+        isRegulatorView={mode === 'review'}
         onNotification={(notification) => {
           const record = INTAKES.find((item) => item.id === notification.intakeId);
           if (record) {
@@ -971,8 +1115,10 @@ function DarkField({ label, value, onChange, readOnly, type = 'text', placeholde
   );
 }
 
-function TopNav({ country, countryName, selectCountry, activeTab, setActiveTab, openDashboard, notificationOpen, setNotificationOpen, onNotification }) {
-  const tabs = [['dashboard', 'Dashboard'], ['intakes', 'Intakes'], ['applications', 'Applications'], ['permits', 'Permits'], ['reports', 'Reports']];
+function TopNav({ country, countryName, selectCountry, activeTab, setActiveTab, openDashboard, notificationOpen, setNotificationOpen, onNotification, isRegulatorView }) {
+  const tabs = isRegulatorView
+    ? REGULATOR_TABS
+    : [['dashboard', 'Dashboard'], ['intakes', 'Intakes'], ['applications', 'Applications'], ['permits', 'Permits'], ['reports', 'Reports']];
   return (
     <header className="h-[76px] bg-[#062247] text-white border-b border-[#D4A100]/40 shadow-lg sticky top-0 z-50">
       <div className="h-full flex items-center justify-between px-5">
@@ -987,9 +1133,9 @@ function TopNav({ country, countryName, selectCountry, activeTab, setActiveTab, 
             </div>
           </button>
         </div>
-        <nav className="flex h-full items-center gap-6">
+        <nav className="flex h-full items-center gap-3">
           {tabs.map(([id, label]) => (
-            <button key={id} onClick={() => setActiveTab(id)} className={`relative h-full px-3 text-sm font-black transition-colors ${activeTab === id ? 'text-white' : 'text-blue-100/70 hover:text-white'}`}>
+            <button key={id} onClick={() => setActiveTab(id)} className={`relative h-full px-2 text-xs font-black transition-colors ${activeTab === id ? 'text-white' : 'text-blue-100/70 hover:text-white'}`}>
               {label}
               {activeTab === id && <span className="absolute left-0 right-0 bottom-0 h-1 bg-[#D4A100] rounded-t-full shadow-[0_-6px_18px_rgba(212,161,0,0.45)]" />}
             </button>
@@ -1095,6 +1241,8 @@ function SnapshotPanel({ packet, mode, step }) {
         <SnapshotItem label="Ground Disturbance" value={packet.groundDisturbance} badge tone={packet.groundDisturbance === 'Yes' ? 'green' : 'amber'} />
         <SnapshotItem label="Work Area Type" value={packet.workAreaType} />
         <SnapshotItem label="Permit Ref" value={packet.permitRef} />
+        <SnapshotItem label="Declared Corridor" value={packet.location} />
+        <SnapshotItem label="Sketch / Markup" value={sketchStatus(packet)} badge tone={packet.sketchFileName ? 'green' : packet.sketchUnavailable ? 'amber' : 'red'} />
         <div className="border-t border-slate-200 pt-5">
           <div className="flex justify-between text-xs font-black uppercase text-slate-500 mb-2"><span>Intake Completeness</span><span className="text-[#001B3D]">{packet.completeness}%</span></div>
           <Progress value={packet.completeness} wide />
@@ -1139,27 +1287,63 @@ function Dashboard({ records, filteredRecords, countryName, onOpenQueue, onOpen,
   );
 }
 
-function RegulatorReviewConsole({ onStartIntake }) {
-  const [reviewFilters, setReviewFilters] = useState({ permit: '', ticket: '', market: 'All', status: 'All', dateRange: 'Last 30 days' });
+function RegulatorReviewConsole({ activeTab, onSwitchToIntake }) {
+  const tabRecordTypes = {
+    dashboard: 'All',
+    'cbyd-records': 'CBYD Tickets',
+    conflicts: 'Conflicts',
+    notifications: 'SLA Exceptions',
+    'linked-permits': 'Permit-Linked',
+    'fee-events': 'Fee-Bearing Events',
+    reports: 'All',
+  };
+  const [reviewFilters, setReviewFilters] = useState({
+    permit: '',
+    ticket: '',
+    country: 'Nigeria',
+    state: 'All States',
+    lga: 'All LGAs',
+    status: 'All',
+    dateRange: 'Last 30 Days',
+    recordType: 'All',
+  });
   const [selectedTicket, setSelectedTicket] = useState(REGULATOR_ROWS[0]);
-  const windowMetrics = regulatorMetricsForWindow(reviewFilters.dateRange);
-  const windowRows = regulatorRowsForWindow(reviewFilters.dateRange);
-  const filtered = windowRows.filter((row) => {
+  const [roleSwitchOpen, setRoleSwitchOpen] = useState(false);
+  const tabRecordType = tabRecordTypes[activeTab] || 'All';
+  const effectiveRecordType = reviewFilters.recordType === 'All' ? tabRecordType : reviewFilters.recordType;
+  const windowRows = regulatorRowsForWindow(dateWindowForRegulatorFilter(reviewFilters.dateRange));
+  const geographyRows = windowRows.filter((row) => {
+    const stateOk = reviewFilters.state === 'All States' || row.state === reviewFilters.state;
+    const lgaOk = reviewFilters.lga === 'All LGAs' || row.lga === reviewFilters.lga;
+    return stateOk && lgaOk;
+  });
+  const filtered = geographyRows.filter((row) => {
     const permitOk = !reviewFilters.permit || row.permitNumber.toLowerCase().includes(reviewFilters.permit.toLowerCase());
     const ticketOk = !reviewFilters.ticket || row.ticket.toLowerCase().includes(reviewFilters.ticket.toLowerCase());
-    const marketOk = reviewFilters.market === 'All' || row.market === reviewFilters.market;
     const statusOk = reviewFilters.status === 'All' || row.status === reviewFilters.status;
-    return permitOk && ticketOk && marketOk && statusOk;
+    const typeOk = recordTypeMatches(row, effectiveRecordType);
+    return permitOk && ticketOk && statusOk && typeOk;
   });
   const activeTicket = selectedTicket === null ? null : filtered.find((row) => row.ticket === selectedTicket?.ticket) || filtered[0] || null;
+  const windowMetrics = regulatorMetricsFromRows(geographyRows);
   const metrics = [
-    ['Submitted CBYD Tickets', windowMetrics.submitted, ClipboardCheck, 'blue'],
-    ['Permits Linked', windowMetrics.permits, FileText, 'green'],
-    ['Conflicts Detected', windowMetrics.conflicts, AlertTriangle, 'amber'],
-    ['Notifications Issued', windowMetrics.notifications, Bell, 'blue'],
-    ['SLA Exceptions', windowMetrics.slaExceptions, Clock, 'red'],
-    ['Fee-Bearing Events', windowMetrics.feeEvents, Database, 'green'],
+    ['Submitted CBYD Tickets', windowMetrics.submitted, ClipboardCheck, 'blue', 'CBYD Tickets'],
+    ['Permits Linked', windowMetrics.permits, FileText, 'green', 'Permit-Linked'],
+    ['Conflicts Detected', windowMetrics.conflicts, AlertTriangle, 'amber', 'Conflicts'],
+    ['Notifications Issued', windowMetrics.notifications, Bell, 'blue', 'All'],
+    ['SLA Exceptions', windowMetrics.slaExceptions, Clock, 'red', 'SLA Exceptions'],
+    ['Fee-Bearing Events', windowMetrics.feeEvents, Database, 'green', 'Fee-Bearing Events'],
   ];
+  const titleByTab = {
+    dashboard: 'National Regulator Dashboard',
+    'cbyd-records': 'CBYD Records',
+    conflicts: 'Conflict Register',
+    notifications: 'Notifications & SLA',
+    'linked-permits': 'Linked Permits',
+    'fee-events': 'Fee-Bearing Events',
+    reports: 'Reports / Audit Log',
+  };
+  const updateState = (state) => setReviewFilters((current) => ({ ...current, state, lga: 'All LGAs' }));
   return (
     <section className="space-y-6">
       <div className="rounded-3xl border border-white/10 bg-[#071A33] p-7 text-white shadow-2xl">
@@ -1169,21 +1353,75 @@ function RegulatorReviewConsole({ onStartIntake }) {
               <p className="text-[10px] font-black uppercase tracking-[0.32em] text-blue-300">Authorized Oversight</p>
               <span className="rounded-full border border-[#D4A100]/30 bg-[#D4A100]/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-200">Regulator View</span>
             </div>
-            <h1 className="mt-3 text-4xl font-black tracking-tight">Regulator Review Console</h1>
-            <p className="mt-3 max-w-4xl text-sm leading-relaxed text-blue-100/80">Permit-linked CBYD activity, conflict screening records, stakeholder notifications, and audit status.</p>
-            <p className="mt-4 inline-flex rounded-full border border-blue-400/25 bg-blue-500/10 px-4 py-2 text-xs font-black uppercase tracking-widest text-blue-100">Reporting window: {reviewFilters.dateRange}</p>
+            <h1 className="mt-3 text-4xl font-black tracking-tight">{titleByTab[activeTab] || 'National Regulator Dashboard'}</h1>
+            <p className="mt-3 max-w-4xl text-sm leading-relaxed text-blue-100/80">National oversight of permit-linked CBYD activity, conflict screening, stakeholder notifications, SLA status, fee-bearing events, and audit history.</p>
+            <p className="mt-4 inline-flex rounded-full border border-blue-400/25 bg-blue-500/10 px-4 py-2 text-xs font-black uppercase tracking-widest text-blue-100">
+              Jurisdiction: {reviewFilters.country} / {reviewFilters.state} / {reviewFilters.lga} · {reviewFilters.dateRange}
+            </p>
           </div>
-          <button onClick={onStartIntake} className="rounded-xl bg-[#D4A100] px-6 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg hover:bg-[#b98d00]">Start New Intake</button>
+          <div className="flex flex-wrap justify-end gap-3">
+            <button className="rounded-xl border border-white/15 px-5 py-3 text-xs font-black uppercase tracking-widest text-blue-100 hover:bg-white/10">Export Report</button>
+            <button onClick={() => setReviewFilters((current) => ({ ...current, recordType: 'SLA Exceptions' }))} className="rounded-xl border border-white/15 px-5 py-3 text-xs font-black uppercase tracking-widest text-blue-100 hover:bg-white/10">View SLA Exceptions</button>
+            <button onClick={() => setReviewFilters((current) => ({ ...current, recordType: 'Conflicts' }))} className="rounded-xl border border-white/15 px-5 py-3 text-xs font-black uppercase tracking-widest text-blue-100 hover:bg-white/10">Open Conflict Register</button>
+            <button onClick={() => setReviewFilters((current) => ({ ...current, recordType: 'All' }))} className="rounded-xl border border-white/15 px-5 py-3 text-xs font-black uppercase tracking-widest text-blue-100 hover:bg-white/10">View Audit Trail</button>
+            <button onClick={() => setRoleSwitchOpen(true)} className="rounded-xl bg-white/10 px-5 py-3 text-xs font-black uppercase tracking-widest text-white hover:bg-white/15">Switch to Intake Operations</button>
+          </div>
         </div>
       </div>
 
+      {roleSwitchOpen && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-black text-amber-950">You are leaving Regulator View.</h2>
+              <p className="mt-1 text-sm text-amber-900">Intake creation requires Intake Operations permissions. Continue only if you intend to authenticate as an intake clerk or operations user.</p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button onClick={() => setRoleSwitchOpen(false)} className="rounded-xl border border-amber-700 px-5 py-3 text-xs font-black uppercase tracking-widest text-amber-900">Stay in Regulator View</button>
+              <button onClick={onSwitchToIntake} className="rounded-xl bg-[#D4A100] px-5 py-3 text-xs font-black uppercase tracking-widest text-white">Continue to Intake Login</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm font-bold text-slate-700 shadow-sm">
-        Metrics reflect selected reporting window. Change the Date Range filter to reconcile the oversight totals with the visible regulator records.
+        Metrics and records reflect selected jurisdiction, date range, and record type. This is an oversight console; CBYD intake creation is handled separately in Intake Operations.
       </div>
 
+      <Card title="Jurisdiction Filters" icon={Filter}>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
+          <ControlledSelect label="Country / Market" value={reviewFilters.country} options={['Nigeria']} onChange={(country) => setReviewFilters((current) => ({ ...current, country }))} />
+          <ControlledSelect label="State" value={reviewFilters.state} options={Object.keys(STATE_LGAS)} onChange={updateState} />
+          <ControlledSelect label="LGA" value={reviewFilters.lga} options={STATE_LGAS[reviewFilters.state] || STATE_LGAS['All States']} onChange={(lga) => setReviewFilters((current) => ({ ...current, lga }))} />
+          <ControlledSelect label="Date Range" value={reviewFilters.dateRange} options={REGULATOR_DATE_OPTIONS} onChange={(dateRange) => setReviewFilters((current) => ({ ...current, dateRange }))} />
+          <ControlledSelect label="Record Type" value={reviewFilters.recordType} options={REGULATOR_RECORD_TYPES} onChange={(recordType) => setReviewFilters((current) => ({ ...current, recordType }))} />
+          <div className="flex items-end"><button onClick={() => setReviewFilters({ permit: '', ticket: '', country: 'Nigeria', state: 'All States', lga: 'All LGAs', status: 'All', dateRange: 'Last 30 Days', recordType: 'All' })} className="min-h-[46px] w-full rounded-lg border border-[#001B3D] px-4 py-3 font-black hover:bg-slate-50">Reset</button></div>
+        </div>
+      </Card>
+
       <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-6 gap-4">
-        {metrics.map(([label, value, Icon, tone]) => <KpiCard key={label} label={label} value={value} sub={reviewFilters.dateRange} tone={tone} icon={Icon} />)}
+        {metrics.map(([label, value, Icon, tone, recordType]) => (
+          <button key={label} onClick={() => setReviewFilters((current) => ({ ...current, recordType }))} className="text-left">
+            <KpiCard label={label} value={value} sub={reviewFilters.dateRange} tone={tone} icon={Icon} />
+          </button>
+        ))}
       </div>
+
+      {activeTab === 'reports' && (
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+          <Card title="Regional Activity Summary" icon={Map}>
+            {Object.entries(geographyRows.reduce((summary, row) => ({ ...summary, [row.state]: (summary[row.state] || 0) + 1 }), {})).map(([state, count]) => <ReportBar key={state} label={state} value={Math.max(8, Math.round((count / Math.max(geographyRows.length, 1)) * 100))} tone="blue" />)}
+          </Card>
+          <Card title="SLA Exception Summary" icon={Clock}>
+            <Metric label="Warning / Exception Records" value={windowMetrics.slaExceptions} tone={windowMetrics.slaExceptions ? 'red' : 'green'} />
+            <Metric label="Oversight Scope" value={`${reviewFilters.state} / ${reviewFilters.lga}`} />
+          </Card>
+          <Card title="Audit Log Scope" icon={History}>
+            <Metric label="Read-Only Records" value={filtered.length} />
+            <Metric label="Record Type" value={effectiveRecordType} />
+          </Card>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_420px] gap-5 items-start">
         <div className="space-y-5 min-w-0">
@@ -1192,21 +1430,19 @@ function RegulatorReviewConsole({ onStartIntake }) {
               This view gives authorized oversight users visibility into permit-linked CBYD activity, intake volumes, conflict screening, stakeholder notifications, SLA status, and audit history. It supports transparent governance of excavation activity and PPP-linked reporting.
             </p>
           </Card>
-          <Card title="Review Filters" icon={Filter}>
-            <div className="grid grid-cols-1 lg:grid-cols-6 gap-3">
+          <Card title={`${effectiveRecordType === 'All' ? 'CBYD Oversight Records' : effectiveRecordType} Record Filters`} icon={Search}>
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
               <EditableField label="Permit Number" value={reviewFilters.permit} onChange={(permit) => setReviewFilters((current) => ({ ...current, permit }))} />
               <EditableField label="CBYD Ticket" value={reviewFilters.ticket} onChange={(ticket) => setReviewFilters((current) => ({ ...current, ticket }))} />
-              <ControlledSelect label="Market / Region" value={reviewFilters.market} options={['All', ...MARKET_REGIONS]} onChange={(market) => setReviewFilters((current) => ({ ...current, market }))} />
               <ControlledSelect label="Status" value={reviewFilters.status} options={['All', ...new Set(windowRows.map((row) => row.status))]} onChange={(status) => setReviewFilters((current) => ({ ...current, status }))} />
-              <ControlledSelect label="Date Range" value={reviewFilters.dateRange} options={REGULATOR_WINDOW_OPTIONS} onChange={(dateRange) => setReviewFilters((current) => ({ ...current, dateRange }))} />
-              <div className="flex items-end"><button onClick={() => setReviewFilters({ permit: '', ticket: '', market: 'All', status: 'All', dateRange: 'Last 30 days' })} className="min-h-[46px] w-full rounded-lg border border-[#001B3D] px-4 py-3 font-black hover:bg-slate-50">Reset</button></div>
+              <div className="flex items-end"><button onClick={() => setReviewFilters((current) => ({ ...current, permit: '', ticket: '', status: 'All' }))} className="min-h-[46px] w-full rounded-lg border border-[#001B3D] px-4 py-3 font-black hover:bg-slate-50">Clear Record Filters</button></div>
             </div>
           </Card>
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
             <table className="w-full min-w-[1280px] text-left">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
-                  {['Permit Number', 'CBYD Ticket', 'Submitted By', 'Department / Agency', 'Market / Region', 'Corridor / Location', 'Conflicts Detected', 'Asset Owners Notified', 'Notification Status', 'SLA Status', 'Current Status', 'Submitted Date'].map((header) => <th key={header} className="px-4 py-3">{header}</th>)}
+                  {['Permit Number', 'CBYD Ticket', 'Submitted By', 'Department / Agency', 'State / LGA', 'Corridor / Location', 'Conflicts Detected', 'Asset Owners Notified', 'Notification Status', 'SLA Status', 'Current Status', 'Submitted Date'].map((header) => <th key={header} className="px-4 py-3">{header}</th>)}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -1216,7 +1452,7 @@ function RegulatorReviewConsole({ onStartIntake }) {
                     <td className="px-4 py-4 font-black">{row.ticket}</td>
                     <td className="px-4 py-4">{row.submittedBy}</td>
                     <td className="px-4 py-4">{row.agency}</td>
-                    <td className="px-4 py-4">{row.market}</td>
+                    <td className="px-4 py-4">{row.state} / {row.lga}</td>
                     <td className="px-4 py-4">{row.corridor}</td>
                     <td className="px-4 py-4">{row.conflicts}</td>
                     <td className="px-4 py-4 text-sm">{row.owners.join(', ')}</td>
@@ -1228,7 +1464,7 @@ function RegulatorReviewConsole({ onStartIntake }) {
                 ))}
               </tbody>
             </table>
-            {filtered.length === 0 && <div className="p-8 text-center text-slate-500">No regulator records match the current filters for {reviewFilters.dateRange}.</div>}
+            {filtered.length === 0 && <div className="p-8 text-center text-slate-500">No regulator records match the current jurisdiction and record filters.</div>}
           </div>
         </div>
         <RegulatorDetailPanel row={activeTicket} onClose={() => setSelectedTicket(null)} />
@@ -1262,19 +1498,28 @@ function RegulatorDetailPanel({ row, onClose }) {
         <button onClick={onClose} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black hover:bg-slate-50">Close</button>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <SnapshotItem label="Permit Number" value={row.permitNumber} />
-        <SnapshotItem label="CBYD Ticket" value={row.ticket} />
+        <SnapshotItem label="CBYD Ticket ID" value={row.ticket} />
+        <SnapshotItem label="Permit Reference" value={row.permitNumber} />
+        <SnapshotItem label="Requester" value={row.requester} />
+        <SnapshotItem label="Declared Corridor" value={row.corridor} />
+        <SnapshotItem label="State / LGA" value={`${row.state} / ${row.lga}`} />
+        <SnapshotItem label="Corridor Record Status" value={row.corridorRecordStatus} />
+        <SnapshotItem label="Asset Screening Status" value={row.assetScreeningStatus} />
+        <SnapshotItem label="Response Package Status" value={row.responsePackageStatus} />
         <SnapshotItem label="Submitted By" value={row.submittedBy} />
         <SnapshotItem label="Officer ID" value={row.officerId} />
         <SnapshotItem label="Department / Agency" value={row.agency} />
         <SnapshotItem label="Submission Timestamp" value={row.submittedDate} />
-        <SnapshotItem label="Corridor / Location" value={row.corridor} />
         <SnapshotItem label="SLA Status" value={row.sla} badge tone={row.sla === 'Exception' ? 'red' : row.sla === 'Warning' ? 'amber' : 'green'} />
         <SnapshotItem label="Fee-Bearing Event" value={row.feeBearing} badge tone="green" />
       </div>
       <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
         <h3 className="font-black mb-2">Conflict Screening Summary</h3>
-        <p className="text-sm text-slate-700">{row.conflicts} conflicts detected. Asset owners contacted: {row.owners.join(', ')}.</p>
+        <p className="text-sm text-slate-700">{row.conflicts} conflicts detected. Likely asset owners: {row.owners.join(', ')}.</p>
+      </div>
+      <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <h3 className="font-black mb-2">Notifications Issued</h3>
+        <p className="text-sm text-slate-700">{row.notificationStatus}. Stakeholder notification remains read-only in Regulator View.</p>
       </div>
       <div className="mt-5">
         <h3 className="font-black mb-3">Audit Trail Events</h3>
@@ -1508,16 +1753,145 @@ function ApplicationsPage({ records, onOpen }) {
         <div className="p-5 border-b border-slate-200"><h2 className="text-xl font-black">Application Workbench</h2></div>
         <div className="divide-y divide-slate-200">
           {records.map((record) => (
-            <div key={record.id} className="p-5 grid grid-cols-7 gap-4 items-center hover:bg-slate-50">
+            <button key={record.id} onClick={() => onOpen(record)} className="w-full p-5 grid grid-cols-7 gap-4 items-center text-left hover:bg-slate-50">
               <div className="font-black">{record.packetId}</div>
               <div className="font-mono text-sm">{record.permitRef}</div>
               <div className="col-span-2"><div className="font-bold">{record.requester}</div><div className="text-sm text-slate-500">{record.location}</div></div>
               <div>{record.workCategory}</div>
               <StatusBadge status={record.status} />
-              <div className="text-right"><button onClick={() => onOpen(record, 1)} className="rounded-lg border border-[#001B3D] px-4 py-2 font-black hover:bg-[#001B3D] hover:text-white">Open</button></div>
-            </div>
+              <div className="text-right"><span className="inline-flex rounded-lg border border-[#001B3D] px-4 py-2 font-black hover:bg-[#001B3D] hover:text-white">{applicationActionLabel(record.status)}</span></div>
+            </button>
           ))}
         </div>
+      </div>
+    </section>
+  );
+}
+
+function ApplicationPackageDetail({ packet, onAmend, onBack }) {
+  const owners = packet.likelyOwners || [];
+  const completeItems = [
+    'Requester identity captured',
+    'Declared corridor recorded',
+    'Schedule provided',
+    packet.sketchFileName ? 'Sketch / corridor markup received' : null,
+  ].filter(Boolean);
+  const optionalGaps = [
+    !packet.sketchFileName ? 'Optional sketch not provided; wider screening buffer may be applied.' : null,
+    packet.sideOfRoad === 'Unknown' ? 'Side of road unknown; side-specific screening unavailable.' : null,
+  ].filter(Boolean);
+  const screeningStatus = packet.status === 'Submitted to DICRI'
+    ? 'Asset screening pending'
+    : packet.status === 'Ready for Review'
+      ? 'Corridor record created'
+      : packet.status === 'Response Issued'
+        ? 'Asset screening complete'
+        : packet.status === 'Needs Clarification'
+          ? 'Not started'
+          : 'Corridor record created';
+  const auditEvents = [
+    [`Created by ${packet.officer}`, '2026-05-10 10:42', 'Application record created from permit-linked intake.'],
+    [`Submitted by ${packet.officer}`, '2026-05-10 11:30', `Status changed to ${packet.status}.`],
+    ['Reviewed by DICRI Operations', '2026-05-10 12:05', `Completeness confirmed at ${packet.completeness}%.`],
+    ['Last updated', '2026-05-12 09:10', packet.warning || 'No active clarification note.'],
+  ];
+
+  return (
+    <section className="space-y-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-700">Application Package Detail</p>
+          <h1 className="mt-2 text-4xl font-black tracking-tight">Controlled Intake Record</h1>
+          <p className="mt-2 text-lg text-slate-600">Review the converted package without restarting the assisted intake workflow.</p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <button onClick={onBack} className="rounded-xl border border-[#001B3D] px-5 py-3 text-xs font-black uppercase tracking-widest hover:bg-slate-50">Back to Applications</button>
+          <button onClick={onAmend} className="rounded-xl bg-[#D4A100] px-5 py-3 text-xs font-black uppercase tracking-widest text-white hover:bg-[#b98d00]">Amend Application</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <Card title="Application Summary" icon={FileText}>
+          <SummaryRow label="Application ID" value={packet.id} />
+          <SummaryRow label="CBYD Packet ID" value={packet.packetId} />
+          <SummaryRow label="Permit Reference" value={packet.permitRef} />
+          <SummaryRow label="Requester" value={packet.requester} />
+          <SummaryRow label="Category" value={packet.workCategory} />
+          <SummaryRow label="Status" value={packet.status} />
+          <SummaryRow label="Market / Region" value={`${packet.country} / ${packet.state}`} />
+          <SummaryRow label="State / LGA" value={`${packet.state} / ${packet.corridorLga || 'Port Harcourt'}`} />
+        </Card>
+
+        <Card title="Declared Work Corridor" icon={Route}>
+          <SummaryRow label="Start Point / Cross Street" value={packet.corridorStartPoint || 'Garrison Junction'} />
+          <SummaryRow label="End Point / Cross Street" value={packet.corridorEndPoint || 'Elekahia Road'} />
+          <SummaryRow label="City / LGA" value={`${packet.corridorCity || 'Port Harcourt'} / ${packet.corridorLga || 'Port Harcourt'}`} />
+          <SummaryRow label="Side of Road" value={packet.sideOfRoad || 'Unknown'} />
+          <SummaryRow label="Screening Buffer" value={packet.screeningBuffer || 'Wider buffer applied'} />
+          <SummaryRow label="Location Source" value={packet.locationSource || 'Assisted intake / permit reference'} />
+          <SummaryRow label="Sketch / Markup Status" value={sketchStatus(packet)} />
+        </Card>
+
+        <Card title="Intake Completeness" icon={ClipboardCheck}>
+          <div className="text-5xl font-black mb-4">{packet.completeness}%</div>
+          <Progress value={packet.completeness} wide />
+          <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Required Complete</div>
+              {completeItems.map((item) => <CheckLine key={item} label={item} />)}
+            </div>
+            <div>
+              <div className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Optional Gaps / Clarification</div>
+              {optionalGaps.length ? optionalGaps.map((item) => <div key={item} className="border-b border-slate-200 py-3 text-sm font-bold text-amber-800">{item}</div>) : <CheckLine label="No optional gaps recorded" />}
+            </div>
+          </div>
+        </Card>
+
+        <Card title="Documents" icon={Upload}>
+          <UploadRow label="Permit File" file={`${packet.permitRef}.pdf`} done />
+          <UploadRow label="Sketch / Markup" file={packet.sketchFileName || 'Not provided'} done={Boolean(packet.sketchFileName)} warning={!packet.sketchFileName} />
+          <UploadRow label="Traffic Plan" file={packet.trafficImpact === 'No traffic impact' ? 'Optional' : 'traffic-plan.pdf'} done={packet.trafficImpact !== 'No traffic impact'} />
+          <UploadRow label="Supporting Documents" file={packet.attachments > 2 ? `${packet.attachments - 2} supporting files` : 'No additional files'} done={packet.attachments > 2} />
+        </Card>
+
+        <Card title="Corridor Screening Status" icon={Map}>
+          <Metric label="Corridor Record" value={screeningStatus} tone={screeningStatus === 'Not started' ? 'amber' : 'green'} />
+          <Metric label="Asset Owner Count" value={owners.length} />
+          <Metric label="Highest Corridor Conflict Risk" value={owners.some((owner) => owner.risk === 'High') ? 'High' : 'Low'} tone={owners.some((owner) => owner.risk === 'High') ? 'red' : 'green'} />
+        </Card>
+
+        <Card title="Likely Asset Owners / Notifications" icon={Bell}>
+          <div className="space-y-3">
+            {owners.map((owner) => (
+              <div key={`${owner.name}-${owner.type}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4 grid grid-cols-5 gap-3 items-center">
+                <div className="col-span-2"><div className="font-black">{owner.name}</div><div className="text-sm text-slate-600">{owner.type}</div></div>
+                <StatusBadge status={owner.risk} />
+                <div className="text-sm"><span className="font-black text-slate-500">SLA</span><div>{owner.sla}</div></div>
+                <div className="text-sm"><span className="font-black text-slate-500">Response</span><div>{owner.response}</div></div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card title="Audit Trail" icon={History} className="xl:col-span-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {auditEvents.map(([actor, time, note]) => (
+              <div key={`${actor}-${time}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="font-black">{actor}</div>
+                <div className="mt-1 text-xs font-mono text-slate-500">{time}</div>
+                <div className="mt-2 text-sm text-slate-700">{note}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-wrap gap-3">
+        {applicationControlledActions(packet.status).map((action) => (
+          <button key={action} onClick={action === 'Update Application' ? onAmend : undefined} className="rounded-xl border border-[#001B3D] px-5 py-3 text-xs font-black uppercase tracking-widest hover:bg-[#001B3D] hover:text-white">
+            {action}
+          </button>
+        ))}
       </div>
     </section>
   );
@@ -1576,13 +1950,13 @@ function IntakeWorkflow({ country, packet, step, nextStep, backStep, openDashboa
         <p className="text-slate-600 mt-2 text-lg">Selected record: <span className="font-black">{packet.id}</span> / {packet.requester}</p>
       </div>
       {step === 1 && <StepOne packet={packet} updatePacket={updatePacket} />}
-      {step === 2 && <StepTwo packet={packet} />}
+      {step === 2 && <StepTwo packet={packet} updatePacket={updatePacket} />}
       {step === 3 && <StepThree packet={packet} updateEligibility={updateEligibility} />}
       {step === 4 && <StepFour packet={packet} toggleClassification={toggleClassification} />}
       {step === 5 && <StepFive country={country} packet={packet} updatePacket={updatePacket} setModal={setModal} />}
       {step === 6 && <StepSix packet={packet} updatePacket={updatePacket} />}
       {step === 7 && <StepSeven packet={packet} updatePacket={updatePacket} />}
-      {step === 8 && <StepEight packet={packet} />}
+      {step === 8 && <StepEight packet={packet} updatePacket={updatePacket} />}
       {step === 9 && <ReviewStep packet={packet} updatePacket={updatePacket} submitToDicri={submitToDicri} />}
       {step === 10 && <SubmittedStep packet={packet} openDashboard={openDashboard} />}
       {step < 10 && (
@@ -1626,30 +2000,54 @@ function StepOne({ packet, updatePacket }) {
         <Field label="Date Received" value="2026-05-12 10:42" />
       </FormSection>
       <FormSection number="2" title="Requester Details">
-        <Field label="Requester Type" value={packet.requesterType} />
-        <Field label="Company / Unit" value={packet.requester} />
-        <Field label="Contact Person" value={packet.contact} />
-        <Field label="Phone Number" value={packet.phone} />
-        <Field label="Email Address" value={packet.email} />
-        <Field label="Existing Permit Ref" value={packet.permitRef} />
+        <ControlledSelect label="Requester Type" value={packet.requesterType} options={withCurrentOption(REQUESTER_TYPES, packet.requesterType)} onChange={(requesterType) => updatePacket({ requesterType })} />
+        <EditableField label="Company / Unit" value={packet.requester} onChange={(requester) => updatePacket({ requester })} flush />
+        <EditableField label="Contact Person" value={packet.contact} onChange={(contact) => updatePacket({ contact })} flush />
+        <EditableField label="Phone Number" value={packet.phone} onChange={(phone) => updatePacket({ phone })} flush />
+        <EditableField label="Email Address" value={packet.email} type="email" onChange={(email) => updatePacket({ email })} flush />
+        <EditableField label="Existing Permit Ref" value={packet.permitRef} onChange={(permitRef) => updatePacket({ permitRef })} flush />
       </FormSection>
     </div>
   );
 }
 
-function StepTwo({ packet }) {
+function StepTwo({ packet, updatePacket }) {
   return (
-    <FormSection number="2" title="Requester Details">
-      <Field label="Requester Type" value={packet.requesterType} />
-      <Field label="Company / Agency" value={packet.requester} />
-      <Field label="Contact Person" value={packet.contact} />
-      <Field label="Phone Number" value={packet.phone} />
-      <Field label="Email Address" value={packet.email} />
-      <Field label="Permit / Project Reference" value={packet.permitRef} />
-      <div className="col-span-3 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm leading-relaxed text-slate-700">
-        <strong>Controlled identity capture:</strong> this record now drives all workflow screens, the side snapshot, owner context, and review scoring.
-      </div>
-    </FormSection>
+    <div className="space-y-4">
+      <FormSection number="2" title="Requester Details">
+        <ControlledSelect label="Requester Type" value={packet.requesterType} options={withCurrentOption(REQUESTER_TYPES, packet.requesterType)} onChange={(requesterType) => updatePacket({ requesterType })} />
+        <EditableField label="Company / Unit" value={packet.requester} onChange={(requester) => updatePacket({ requester })} flush />
+        <EditableField label="Contact Person" value={packet.contact} onChange={(contact) => updatePacket({ contact })} flush />
+        <EditableField label="Phone Number" value={packet.phone} onChange={(phone) => updatePacket({ phone })} flush />
+        <EditableField label="Email Address" value={packet.email} type="email" onChange={(email) => updatePacket({ email })} flush />
+        <EditableField label="Existing Permit Ref" value={packet.permitRef} onChange={(permitRef) => updatePacket({ permitRef })} flush />
+        <div className="col-span-3 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm leading-relaxed text-slate-700">
+          <strong>Controlled identity capture:</strong> this record now drives all workflow screens, the side snapshot, owner context, and review scoring.
+        </div>
+      </FormSection>
+      <FormSection number="2A" title="Declared Work Corridor">
+        <EditableField label="Permit Reference" value={packet.permitRef} onChange={(permitRef) => updatePacket({ permitRef })} flush />
+        <div className="col-span-2">
+          <ControlledSelect label="Known / Permit-Linked Corridor" value={packet.location} options={withCurrentOption(CORRIDOR_SUGGESTIONS, packet.location)} onChange={(location) => updatePacket({ location })} />
+        </div>
+        <div className="col-span-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500">Or define corridor manually</div>
+        <EditableField label="Start Point / Cross Street" value={corridorValue(packet, 'corridorStartPoint', 'Garrison Junction')} onChange={(corridorStartPoint) => updatePacket({ corridorStartPoint })} flush />
+        <EditableField label="End Point / Cross Street" value={corridorValue(packet, 'corridorEndPoint', 'Elekahia Road')} onChange={(corridorEndPoint) => updatePacket({ corridorEndPoint })} flush />
+        <EditableField label="City / Town" value={corridorValue(packet, 'corridorCity', 'Port Harcourt')} onChange={(corridorCity) => updatePacket({ corridorCity })} flush />
+        <EditableField label="State" value={packet.state || 'Rivers'} onChange={(state) => updatePacket({ state })} flush />
+        <EditableField label="LGA" value={corridorValue(packet, 'corridorLga', 'Port Harcourt')} onChange={(corridorLga) => updatePacket({ corridorLga })} flush />
+        <ControlledSelect label="Work Area Type" value={packet.workAreaType} options={WORK_AREA_TYPES} onChange={(workAreaType) => updatePacket({ workAreaType, eligibility: { ...packet.eligibility, corridor: workAreaType } })} />
+        <ControlledSelect label="Ground Disturbance" value={packet.groundDisturbance} options={['Yes', 'No', 'Unsure']} onChange={(groundDisturbance) => updatePacket({ groundDisturbance, eligibility: { ...packet.eligibility, ground: groundDisturbance } })} />
+        <EditableField label="Estimated Length" value={packet.estimatedLength || '2.4 km'} onChange={(estimatedLength) => updatePacket({ estimatedLength })} flush />
+        <ControlledSelect label="Side of Road" value={packet.sideOfRoad || 'Unknown'} options={withCurrentOption(SIDE_OF_ROAD_OPTIONS, packet.sideOfRoad || 'Unknown')} onChange={(sideOfRoad) => updatePacket({ sideOfRoad })} />
+        <ControlledSelect label="Screening Buffer" value={packet.screeningBuffer || 'Wider buffer applied'} options={withCurrentOption(SCREENING_BUFFER_OPTIONS, packet.screeningBuffer || 'Wider buffer applied')} onChange={(screeningBuffer) => updatePacket({ screeningBuffer })} />
+        <ControlledSelect label="Location Source" value={packet.locationSource || 'Assisted intake / permit reference'} options={withCurrentOption(LOCATION_SOURCE_OPTIONS, packet.locationSource || 'Assisted intake / permit reference')} onChange={(locationSource) => updatePacket({ locationSource })} />
+        {packet.sideOfRoad === 'Unknown' && <div className="col-span-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">Side of road unknown; wider screening buffer may be applied.</div>}
+        <div className="col-span-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">
+          This declared corridor drives downstream owner screening, conflict risk, and notification requirements.
+        </div>
+      </FormSection>
+    </div>
   );
 }
 
@@ -1702,11 +2100,24 @@ function StepFive({ country, packet, updatePacket, setModal }) {
         <div className="grid grid-cols-2 gap-4 mb-5">
           <ControlledSelect label="Work Area Type" value={packet.workAreaType} options={WORK_AREA_TYPES} onChange={(workAreaType) => updatePacket({ workAreaType, eligibility: { ...packet.eligibility, corridor: workAreaType } })} />
           <Field label="Country / Market" value={packet.country} />
-          <Field label="State / Region" value={packet.state} />
+          <EditableField label="State / Region" value={packet.state} onChange={(state) => updatePacket({ state })} flush />
           <EditableField label="Permit Reference" value={packet.permitRef} onChange={(permitRef) => updatePacket({ permitRef })} />
           <div className="col-span-2">
-            <ControlledSelect label="Declared Corridor" value={packet.location} options={withCurrentOption(CORRIDOR_SUGGESTIONS, packet.location)} onChange={(location) => updatePacket({ location })} />
+            <ControlledSelect label="Known / Permit-Linked Corridor" value={packet.location} options={withCurrentOption(CORRIDOR_SUGGESTIONS, packet.location)} onChange={(location) => updatePacket({ location })} />
           </div>
+          <div className="col-span-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500">Or define corridor manually</div>
+          <EditableField label="Start Point / Cross Street" value={corridorValue(packet, 'corridorStartPoint', 'Garrison Junction')} onChange={(corridorStartPoint) => updatePacket({ corridorStartPoint })} flush />
+          <EditableField label="End Point / Cross Street" value={corridorValue(packet, 'corridorEndPoint', 'Elekahia Road')} onChange={(corridorEndPoint) => updatePacket({ corridorEndPoint })} flush />
+          <EditableField label="City / Town" value={corridorValue(packet, 'corridorCity', 'Port Harcourt')} onChange={(corridorCity) => updatePacket({ corridorCity })} flush />
+          <EditableField label="LGA" value={corridorValue(packet, 'corridorLga', 'Port Harcourt')} onChange={(corridorLga) => updatePacket({ corridorLga })} flush />
+          <ControlledSelect label="Side of Road" value={packet.sideOfRoad || 'Unknown'} options={withCurrentOption(SIDE_OF_ROAD_OPTIONS, packet.sideOfRoad || 'Unknown')} onChange={(sideOfRoad) => updatePacket({ sideOfRoad })} />
+          <EditableField label="Estimated Length" value={packet.estimatedLength || '2.4 km'} onChange={(estimatedLength) => updatePacket({ estimatedLength })} flush />
+          <ControlledSelect label="Screening Buffer" value={packet.screeningBuffer || 'Wider buffer applied'} options={withCurrentOption(SCREENING_BUFFER_OPTIONS, packet.screeningBuffer || 'Wider buffer applied')} onChange={(screeningBuffer) => updatePacket({ screeningBuffer })} />
+          <ControlledSelect label="Location Source" value={packet.locationSource || 'Assisted intake / permit reference'} options={withCurrentOption(LOCATION_SOURCE_OPTIONS, packet.locationSource || 'Assisted intake / permit reference')} onChange={(locationSource) => updatePacket({ locationSource })} />
+          <div className="col-span-2 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+            This declared corridor drives downstream owner screening, conflict risk, and notification requirements.
+          </div>
+          {packet.sideOfRoad === 'Unknown' && <div className="col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">Side of road unknown; wider screening buffer may be applied.</div>}
         </div>
         <CorridorMap packet={packet} onOpen={() => setModal({ type: 'map', packet })} />
       </Card>
@@ -1727,8 +2138,8 @@ function StepSix({ packet, updatePacket }) {
         <ControlledSelect label="Route Length Range" value={packet.lengthRange} options={['Under 100 m', '100 m - 500 m', '0.5 km - 1 km', '1 km - 3 km', 'Area / compound works']} onChange={(value) => updatePacket({ lengthRange: value })} />
         <ControlledSelect label="Surface Type" value={packet.surfaceType} options={['Asphalt roadway / shoulder', 'Paved arterial road', 'Urban road reserve', 'Road shoulder', 'Mixed paved and unpaved']} onChange={(value) => updatePacket({ surfaceType: value })} />
         <ControlledSelect label="Equipment Class" value={packet.equipmentClass} options={['Hand tools only', 'Light excavator + manual finish', 'Vacuum truck + hand tools', 'Micro-trencher', 'Road saw + milling machine', 'Piling rig + excavator']} onChange={(value) => updatePacket({ equipmentClass: value })} />
-        <ControlledSelect label="Traffic Impact" value={packet.trafficImpact} options={['No traffic impact', 'Shoulder closure', 'Single-lane managed works', 'Partial carriageway closure', 'Localized diversion']} onChange={(value) => updatePacket({ trafficImpact: value })} />
-        <ControlledSelect label="Planned Start Window" value={packet.startWindow} options={['Within 48 hours', 'Within 7 days', '8-14 days', '15-30 days']} onChange={(value) => updatePacket({ startWindow: value })} />
+        <ControlledSelect label="Traffic Impact" value={packet.trafficImpact} options={withCurrentOption(TRAFFIC_IMPACT_OPTIONS, packet.trafficImpact)} onChange={(value) => updatePacket({ trafficImpact: value })} />
+        <ControlledSelect label="Planned Start Window" value={packet.startWindow} options={withCurrentOption(START_WINDOW_OPTIONS, packet.startWindow)} onChange={(value) => updatePacket({ startWindow: value })} />
         <ControlledSelect label="Restoration Requirement" value={packet.restoration} options={['Same-day reinstatement', 'Temporary reinstatement then permanent patch', 'Permanent road reinstatement', 'Engineered reinstatement']} onChange={(value) => updatePacket({ restoration: value })} />
       </FormSection>
       <Card title="Method Risk Controls" icon={Shield}>
@@ -1742,38 +2153,88 @@ function StepSix({ packet, updatePacket }) {
 }
 
 function StepSeven({ packet, updatePacket }) {
+  const sla = calculateScheduleImplications(packet);
   return (
     <div className="grid grid-cols-2 gap-5">
       <Card title="Project Schedule" icon={Calendar}>
-        <EditableField label="Expected Start Date" value={packet.expectedStart} onChange={(value) => updatePacket({ expectedStart: value })} />
-        <EditableField label="Expected Completion Date" value={packet.expectedCompletion} onChange={(value) => updatePacket({ expectedCompletion: value })} />
-        <Field label="Start Window" value={packet.startWindow} />
-        <Field label="Traffic Impact" value={packet.trafficImpact} />
+        <EditableField label="Expected Start Date" value={packet.expectedStart} type="date" onChange={(value) => updatePacket({ expectedStart: value })} />
+        <EditableField label="Expected Completion Date" value={packet.expectedCompletion} type="date" onChange={(value) => updatePacket({ expectedCompletion: value })} />
+        <ControlledSelect label="Start Window" value={packet.startWindow} options={withCurrentOption(START_WINDOW_OPTIONS, packet.startWindow)} onChange={(value) => updatePacket({ startWindow: value })} />
+        <div className="mt-4">
+          <ControlledSelect label="Traffic Impact" value={packet.trafficImpact} options={withCurrentOption(TRAFFIC_IMPACT_OPTIONS, packet.trafficImpact)} onChange={(value) => updatePacket({ trafficImpact: value })} />
+        </div>
+        <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm font-semibold text-blue-800">
+          Near-term work windows trigger higher-priority owner notifications.
+        </div>
       </Card>
       <Card title="SLA Implications" icon={Zap}>
-        <Metric label="Owner Response SLA" value={packet.likelyOwners.some((owner) => owner.risk === 'High') ? 'Urgent' : '24h'} tone={packet.likelyOwners.some((owner) => owner.risk === 'High') ? 'red' : 'amber'} />
-        <Metric label="Recommended Screening Priority" value={packet.status === 'Ready for Review' ? 'High' : 'Medium'} tone="amber" />
+        <Metric label="Owner Response SLA" value={sla.ownerResponseSla} tone={priorityTone(sla.ownerResponseSla)} />
+        <Metric label="Recommended Screening Priority" value={sla.screeningPriority} tone={priorityTone(sla.screeningPriority)} />
         <Metric label="Expected Completion" value={packet.expectedCompletion} />
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold text-slate-700">
+          Schedule urgency influences owner response SLA and screening priority.
+        </div>
       </Card>
     </div>
   );
 }
 
-function StepEight({ packet }) {
+function StepEight({ packet, updatePacket }) {
+  const sketchReceived = Boolean(packet.sketchFileName);
+  const sketchMissingByAssumption = Boolean(packet.sketchUnavailable);
   return (
     <div className="grid grid-cols-2 gap-5">
       <Card title="Documentation" icon={Upload}>
         <UploadRow label="Permit Application" file={`${packet.permitRef}.pdf`} done={packet.attachments >= 1} />
-        <UploadRow label="Route Sketch / Map" file={packet.attachments >= 2 ? 'route-sketch.png' : 'Pending'} done={packet.attachments >= 2} warning={packet.attachments < 2} />
+        <UploadRow label="Route Sketch / Map" file={sketchReceived ? packet.sketchFileName : sketchMissingByAssumption ? 'Not provided - documented assumption' : 'Pending'} done={sketchReceived} warning={!sketchReceived} />
         <UploadRow label="Traffic Management Plan" file={packet.trafficImpact === 'No traffic impact' ? 'Optional' : 'traffic-plan.pdf'} done={packet.trafficImpact !== 'No traffic impact'} />
         <UploadRow label="Method Statement" file={packet.completeness > 80 ? 'method-statement.pdf' : 'Pending'} done={packet.completeness > 80} warning={packet.completeness <= 80} />
       </Card>
+      <Card title="Site Sketch / Corridor Markup" icon={Map}>
+        <p className="mb-4 text-sm leading-relaxed text-slate-600">
+          Upload any sketch, marked-up map, route drawing, or excavation diagram that helps define the declared work area.
+        </p>
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5">
+          <div className="text-xs font-black uppercase tracking-widest text-slate-500">Supported demo upload types</div>
+          <div className="mt-2 text-sm font-bold text-slate-700">PDF, JPG / PNG, KMZ / KML, DWG / CAD</div>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              onClick={() => updatePacket({ sketchFileName: `corridor-markup-${packet.permitRef || 'draft'}.pdf`, attachments: Math.max(packet.attachments || 0, 2) })}
+              className="rounded-xl bg-[#001B3D] px-5 py-3 text-sm font-black text-white"
+            >
+              Upload Sketch / Markup
+            </button>
+            {(sketchReceived || sketchMissingByAssumption) && (
+              <button
+                onClick={() => updatePacket({ sketchFileName: '', sketchUnavailable: false, attachments: Math.min(packet.attachments || 0, 1) })}
+                className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-black text-slate-700"
+              >
+                Remove / Replace File
+              </button>
+            )}
+          </div>
+          <label className="mt-5 flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm font-bold text-slate-700">
+            <input
+              type="checkbox"
+              checked={sketchMissingByAssumption}
+              onChange={(event) => updatePacket({ sketchUnavailable: event.target.checked, attachments: event.target.checked ? Math.min(packet.attachments || 0, 1) : packet.attachments })}
+              className="h-4 w-4"
+            />
+            Sketch not available
+          </label>
+          <div className={`mt-4 rounded-xl border p-4 text-sm font-bold ${sketchReceived ? 'border-green-200 bg-green-50 text-green-800' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
+            {sketchReceived ? 'Sketch / corridor markup received.' : 'Optional sketch not provided; wider screening buffer may be applied.'}
+          </div>
+        </div>
+      </Card>
       <Card title="Packet Completeness" icon={ClipboardCheck}>
         <Metric label="Current Completeness" value={`${packet.completeness}%`} />
+        <Metric label="Sketch / Markup" value={sketchStatus(packet)} tone={sketchReceived ? 'green' : 'amber'} />
         <CheckLine label="Requester identity captured" />
         <CheckLine label="Ground disturbance decision captured" />
         <CheckLine label="Likely asset owners identified" />
         <CheckLine label="Schedule provided" />
+        {!sketchReceived && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">Optional sketch not provided; wider screening buffer may be applied.</div>}
       </Card>
     </div>
   );
@@ -1788,6 +2249,9 @@ function ReviewStep({ packet, updatePacket, submitToDicri }) {
         <SummaryRow label="Permit Ref" value={packet.permitRef} />
         <SummaryRow label="Work Category" value={packet.classifications.join(', ')} />
         <SummaryRow label="Location" value={packet.location} />
+        <SummaryRow label="Side of Road" value={packet.sideOfRoad || 'Unknown'} />
+        <SummaryRow label="Screening Buffer" value={packet.screeningBuffer || 'Wider buffer applied'} />
+        <SummaryRow label="Sketch / Markup" value={sketchStatus(packet)} />
         <SummaryRow label="Method" value={packet.method} />
         <SummaryRow label="Depth" value={packet.depthRange} />
         <SummaryRow label="Start Date" value={packet.expectedStart} />
@@ -1812,6 +2276,8 @@ function ReviewStep({ packet, updatePacket, submitToDicri }) {
 }
 
 function SubmittedStep({ packet, openDashboard }) {
+  const finalCompleteness = submittedCompleteness(packet);
+  const sketchReceived = Boolean(packet.sketchFileName);
   return (
     <div className="space-y-5">
       <div className="rounded-2xl border border-green-200 bg-green-50 p-8 flex items-center justify-between">
@@ -1824,9 +2290,17 @@ function SubmittedStep({ packet, openDashboard }) {
       <Card title="Submitted Package Status" icon={ClipboardCheck}>
         <div className="grid grid-cols-3 gap-4">
           <Metric label="Status" value="Submitted to DICRI" tone="green" />
-          <Metric label="Intake Completeness" value="100%" tone="green" />
+          <Metric label="Intake Process" value="Complete" tone="green" />
+          <Metric label="Packet Completeness" value={`${finalCompleteness}%`} tone={sketchReceived ? 'green' : 'amber'} />
           <Metric label="Packet Reference" value={packet.packetId} />
+          <Metric label="Sketch / Markup" value={sketchReceived ? 'Received' : 'Not Provided'} tone={sketchReceived ? 'green' : 'amber'} />
+          <Metric label="Declared Corridor" value={packet.location} />
         </div>
+        {!sketchReceived && (
+          <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">
+            Submitted with optional sketch missing. DICRI may proceed using wider screening assumptions or request clarification if needed.
+          </div>
+        )}
       </Card>
       <HandoffTimeline />
       <div className="flex justify-end gap-3 pt-2">
@@ -1846,37 +2320,62 @@ function CorridorMap({ packet, onOpen }) {
         {[120, 260, 420, 580, 740].map((x) => <line key={x} x1={x} y1="0" x2={x} y2="420" stroke="rgba(255,255,255,0.06)" />)}
         <path d="M55 210 H850" stroke="rgba(148,163,184,0.18)" strokeWidth="42" />
         <path d="M170 30 V390" stroke="rgba(148,163,184,0.16)" strokeWidth="38" />
-        <path d="M55 320 C170 220 270 245 380 190 S630 110 845 185" fill="none" stroke="rgba(34,197,94,0.22)" strokeWidth="44" strokeLinecap="round" />
+        <path d="M55 320 C170 220 270 245 380 190 S630 110 845 185" fill="none" stroke="rgba(34,197,94,0.20)" strokeWidth="48" strokeLinecap="round" />
         <path d="M55 320 C170 220 270 245 380 190 S630 110 845 185" fill="none" stroke="#22C55E" strokeWidth="12" strokeLinecap="round" />
-        <path d="M170 45 V380" stroke="#3B82F6" strokeWidth="9" strokeLinecap="round" strokeDasharray="14 12" />
-        <path d="M70 110 H820" stroke="#A855F7" strokeWidth="7" strokeLinecap="round" strokeDasharray="10 12" />
-        <path d="M250 65 V365" stroke="#F59E0B" strokeWidth="7" strokeLinecap="round" strokeDasharray="10 12" />
-        <path d="M640 60 V365" stroke="#06B6D4" strokeWidth="7" strokeLinecap="round" strokeDasharray="10 12" />
+        <path d="M55 320 C170 220 270 245 380 190 S630 110 845 185" fill="none" stroke="#86EFAC" strokeWidth="4" strokeLinecap="round" strokeDasharray="18 10" />
+        <path d="M505 72 C500 128 512 172 506 226 S498 300 514 350" stroke="#A855F7" strokeWidth="9" strokeLinecap="round" strokeDasharray="12 10" />
+        <path d="M245 82 H760" stroke="#F59E0B" strokeWidth="8" strokeLinecap="round" strokeDasharray="12 12" />
+        <path d="M122 48 V390" stroke="#3B82F6" strokeWidth="9" strokeLinecap="round" strokeDasharray="14 12" />
         <circle cx="510" cy="210" r="92" fill="#EF4444" fillOpacity="0.10" stroke="#EF4444" strokeWidth="3" strokeDasharray="9 8" />
         <circle cx="510" cy="210" r="8" fill="#EF4444" stroke="white" strokeWidth="3" />
         <text x="70" y="190" fill="rgba(255,255,255,0.58)" fontSize="13" fontWeight="900" letterSpacing="2">PRIMARY ROAD CORRIDOR</text>
         <text x="185" y="80" fill="rgba(255,255,255,0.48)" fontSize="12" fontWeight="900" letterSpacing="2" transform="rotate(90 185 80)">CROSS STREET</text>
-        <text x="545" y="122" fill="#FCA5A5" fontSize="12" fontWeight="900" letterSpacing="2">CONFLICT SCREENING ZONE</text>
+        <line x1="604" y1="132" x2="575" y2="158" stroke="#FCA5A5" strokeWidth="1.5" strokeDasharray="4 4" />
+        <rect x="558" y="103" width="230" height="28" rx="10" fill="#0B1F3A" stroke="rgba(252,165,165,0.35)" />
+        <text x="574" y="121" fill="#FCA5A5" fontSize="11" fontWeight="900" letterSpacing="1.6">CONFLICT SCREENING ZONE</text>
         <text x="538" y="240" fill="#FCA5A5" fontSize="12" fontWeight="900" letterSpacing="2">{packet.permitRef}</text>
         {[
-          ['Water', 170, 308, '#3B82F6'],
-          ['Sewer', 286, 232, '#A855F7'],
-          ['Gas', 510, 210, '#F59E0B'],
-          ['Power', 640, 158, '#06B6D4'],
-          ['Fiber', 742, 178, '#22C55E'],
-        ].map(([label, x, y, color]) => (
+          ['Water', 122, 336, 66, 365, '#3B82F6'],
+          ['Sewer', 506, 226, 560, 308, '#A855F7'],
+          ['Gas', 650, 82, 640, 43, '#F59E0B'],
+          ['Fiber', 742, 178, 760, 222, '#22C55E'],
+        ].map(([label, x, y, labelX, labelY, color]) => (
           <g key={label}>
+            <line x1={x} y1={y} x2={labelX - 8} y2={labelY - 4} stroke="rgba(255,255,255,0.55)" strokeWidth="1.5" />
             <circle cx={x} cy={y} r="10" fill={color} stroke="#071A33" strokeWidth="4" />
-            <text x={x + 14} y={y + 4} fill="white" fontSize="10" fontWeight="900" letterSpacing="1.5">{label}</text>
+            <rect x={labelX - 8} y={labelY - 16} width="72" height="24" rx="8" fill="#0B1F3A" stroke="rgba(255,255,255,0.16)" />
+            <text x={labelX} y={labelY} fill="white" fontSize="10" fontWeight="900" letterSpacing="1.4">{label}</text>
           </g>
         ))}
         <circle cx="55" cy="320" r="8" fill="#22C55E" stroke="#071A33" strokeWidth="3" />
         <circle cx="845" cy="185" r="8" fill="#22C55E" stroke="#071A33" strokeWidth="3" />
-        <text x="38" y="394" fill="#CBD5E1" fontSize="11" fontWeight="900" letterSpacing="2">ILLUSTRATIVE SCREENING MAP — SENSITIVE GEOMETRY REDACTED</text>
+        <g transform="translate(34 346)">
+          <rect width="832" height="36" rx="12" fill="#0B1F3A" stroke="rgba(255,255,255,0.14)" />
+          <text x="14" y="22" fill="#CBD5E1" fontSize="9" fontWeight="900" letterSpacing="1.4">LEGEND</text>
+          {[
+            ['#22C55E', 'Fiber'],
+            ['#3B82F6', 'Water'],
+            ['#F59E0B', 'Gas'],
+            ['#A855F7', 'Sewer'],
+            ['#94A3B8', 'Gray band = Declared corridor'],
+            ['#EF4444', 'Red dashed circle = Conflict screening zone'],
+          ].map(([color, label], index) => {
+            const positions = [78, 150, 224, 292, 374, 590];
+            const x = positions[index];
+            return (
+              <g key={label} transform={`translate(${x} 21)`}>
+                <circle cx="0" cy="0" r="4" fill={color} />
+                <text x="9" y="3" fill="#E2E8F0" fontSize="8" fontWeight="800">{label}</text>
+              </g>
+            );
+          })}
+        </g>
+        <text x="42" y="405" fill="#CBD5E1" fontSize="10" fontWeight="900" letterSpacing="1.5">Illustrative screening map — sensitive geometry redacted.</text>
       </svg>
       <div className="absolute left-6 top-6 rounded-2xl border border-white/10 bg-[#0B1F3A]/90 p-5 text-white shadow-xl max-w-xs">
         <div className="text-xs font-black uppercase tracking-widest mb-2 flex items-center gap-2"><Map size={17} className="text-blue-400" /> Corridor Screening</div>
         <p className="text-[11px] uppercase tracking-widest text-blue-100/70 leading-relaxed">{packet.id} / {packet.workAreaType} / {packet.state}</p>
+        <p className="mt-2 text-xs font-bold leading-snug text-white">{packet.location}</p>
       </div>
     </button>
   );
@@ -1885,16 +2384,23 @@ function CorridorMap({ packet, onOpen }) {
 function OwnerPanel({ owners }) {
   return (
     <div className="space-y-3">
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs font-bold leading-relaxed text-blue-900">
+        Corridor conflict risk reflects spatial relationship to the declared work area and screening buffer, not asset type alone.
+      </div>
       {owners.map((owner) => (
         <div key={`${owner.name}-${owner.type}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="flex items-center justify-between gap-3">
             <div><div className="font-black">{owner.name}</div><div className="text-sm text-slate-600">{owner.type}</div></div>
-            <StatusBadge status={owner.risk} />
+            <div className="text-right">
+              <div className="mb-1 text-[9px] font-black uppercase tracking-widest text-slate-500">Corridor Conflict Risk</div>
+              <StatusBadge status={owner.risk} />
+            </div>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
             <div><span className="font-black text-slate-500">Response</span><div>{owner.response}</div></div>
             <div><span className="font-black text-slate-500">SLA</span><div>{owner.sla}</div></div>
           </div>
+          {owner.reason && <div className="mt-3 rounded-lg border border-white bg-white px-3 py-2 text-xs font-bold text-slate-700">{owner.reason}</div>}
         </div>
       ))}
     </div>
@@ -1964,8 +2470,8 @@ function Field({ label, value, className = '' }) {
   return <div className={className}><label className="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">{label}</label><input value={value || ''} readOnly className="min-h-[46px] w-full rounded-lg border border-slate-300 bg-white px-4 py-3 font-medium outline-none" /></div>;
 }
 
-function EditableField({ label, value, onChange }) {
-  return <div className="mb-4"><label className="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">{label}</label><input value={value} onChange={(event) => onChange(event.target.value)} className="min-h-[46px] w-full rounded-lg border border-slate-300 bg-white px-4 py-3 font-medium outline-none focus:ring-2 focus:ring-blue-100" /></div>;
+function EditableField({ label, value, onChange, type = 'text', flush = false }) {
+  return <div className={flush ? '' : 'mb-4'}><label className="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">{label}</label><input value={value || ''} type={type} onChange={(event) => onChange(event.target.value)} className="min-h-[46px] w-full rounded-lg border border-slate-300 bg-white px-4 py-3 font-medium outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" /></div>;
 }
 
 function ControlledSelect({ label, value, options, onChange }) {
@@ -2032,7 +2538,7 @@ function CheckLine({ label }) {
 }
 
 function Metric({ label, value, tone }) {
-  const color = tone === 'red' ? 'text-red-700 bg-red-50 border-red-200' : tone === 'amber' ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-blue-700 bg-blue-50 border-blue-200';
+  const color = tone === 'red' ? 'text-red-700 bg-red-50 border-red-200' : tone === 'amber' ? 'text-amber-700 bg-amber-50 border-amber-200' : tone === 'green' ? 'text-green-700 bg-green-50 border-green-200' : 'text-blue-700 bg-blue-50 border-blue-200';
   return <div className="flex items-center justify-between border-b border-slate-200 py-4"><span className="font-bold text-slate-600">{label}</span><span className={`rounded-lg border px-3 py-1 font-black ${color}`}>{value}</span></div>;
 }
 
@@ -2063,6 +2569,127 @@ function withCurrentOption(options, current) {
   return current && !options.includes(current) ? [current, ...options] : options;
 }
 
+const PRIORITY_ORDER = ['Standard', 'Medium', 'High', 'Urgent', 'Critical'];
+
+function increasePriority(priority) {
+  const index = PRIORITY_ORDER.indexOf(priority);
+  return PRIORITY_ORDER[Math.min(index + 1, PRIORITY_ORDER.length - 1)] || priority;
+}
+
+function basePriorityForStartWindow(startWindow) {
+  if (startWindow === 'Within 48 hours') return 'Critical';
+  if (startWindow === 'Within 7 days') return 'Urgent';
+  if (startWindow === 'Within 14 days' || startWindow === '8-14 days') return 'High';
+  if (startWindow === 'Within 21 days' || startWindow === '15-30 days') return 'Medium';
+  return 'Standard';
+}
+
+function isFourteenDaysOrLess(startWindow) {
+  return ['Within 48 hours', 'Within 7 days', 'Within 14 days', '8-14 days'].includes(startWindow);
+}
+
+function calculateScheduleImplications(packet) {
+  let ownerResponseSla = basePriorityForStartWindow(packet.startWindow);
+  if (['Full road closure', 'Emergency works'].includes(packet.trafficImpact)) {
+    ownerResponseSla = increasePriority(ownerResponseSla);
+  } else if (packet.trafficImpact === 'Multi-lane restriction' && isFourteenDaysOrLess(packet.startWindow)) {
+    ownerResponseSla = increasePriority(ownerResponseSla);
+  }
+
+  const screeningPriorityBySla = {
+    Critical: 'Critical',
+    Urgent: 'High',
+    High: 'High',
+    Medium: 'Medium',
+    Standard: 'Standard',
+  };
+
+  return {
+    ownerResponseSla,
+    screeningPriority: screeningPriorityBySla[ownerResponseSla],
+  };
+}
+
+function priorityTone(priority) {
+  if (priority === 'Critical' || priority === 'Urgent') return 'red';
+  if (priority === 'High' || priority === 'Medium') return 'amber';
+  if (priority === 'Standard') return 'green';
+  return 'blue';
+}
+
+function corridorValue(packet, key, fallback) {
+  return packet[key] || fallback;
+}
+
+function generatedCorridor(packet) {
+  const start = corridorValue(packet, 'corridorStartPoint', 'Garrison Junction');
+  const end = corridorValue(packet, 'corridorEndPoint', 'Elekahia Road');
+  const city = corridorValue(packet, 'corridorCity', packet.state === 'Lagos' ? 'Lagos' : 'Port Harcourt');
+  return `${start} to ${end}, ${city}`;
+}
+
+function normalizePacketPatch(packet, patch) {
+  const manualFields = ['corridorStartPoint', 'corridorEndPoint', 'corridorCity'];
+  const next = { ...packet, ...patch };
+  const normalized = { ...next };
+
+  if (manualFields.some((field) => Object.prototype.hasOwnProperty.call(patch, field))) {
+    normalized.location = generatedCorridor(normalized);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'sideOfRoad')) {
+    if (patch.sideOfRoad === 'Unknown') {
+      normalized.screeningBuffer = 'Wider buffer applied';
+      normalized.warning = 'Side of road unknown; wider screening buffer may be applied.';
+    } else {
+      normalized.screeningBuffer = 'Side-specific buffer';
+      normalized.warning = 'Side of road captured; side-specific screening buffer applied.';
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'sketchFileName') && patch.sketchFileName) {
+    normalized.sketchUnavailable = false;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'sketchUnavailable') && patch.sketchUnavailable) {
+    normalized.sketchFileName = '';
+    normalized.warning = 'Optional sketch not provided; wider screening buffer may be applied.';
+  }
+
+  return normalized;
+}
+
+function sketchStatus(packet) {
+  if (packet.sketchFileName) return 'Received';
+  if (packet.sketchUnavailable) return 'Not Provided';
+  return 'Pending';
+}
+
+function applicationActionLabel(status) {
+  const labels = {
+    'Draft Intake Request': 'Continue Intake',
+    'Needs Clarification': 'Resolve',
+    'Ready for Review': 'Review',
+    'Submitted to DICRI': 'View Package',
+    'Screening in Progress': 'View Status',
+    'Response Issued': 'View Response',
+  };
+  return labels[status] || 'View Package';
+}
+
+function applicationControlledActions(status) {
+  if (status === 'Needs Clarification') return ['Update Application', 'Request Clarification', 'Download Summary', 'View Audit Trail'];
+  if (status === 'Ready for Review') return ['Update Application', 'Submit to DICRI', 'View Corridor Screening', 'Download Summary', 'View Audit Trail'];
+  if (status === 'Submitted to DICRI') return ['View Corridor Screening', 'Download Summary', 'View Audit Trail'];
+  if (status === 'Screening in Progress') return ['View Corridor Screening', 'Download Summary', 'View Audit Trail'];
+  if (status === 'Response Issued') return ['View Response Package', 'Download Summary', 'View Audit Trail'];
+  return ['Update Application', 'Download Summary', 'View Audit Trail'];
+}
+
+function submittedCompleteness(packet) {
+  return packet.sketchFileName ? 100 : 96;
+}
+
 function makeAuthForm(agency) {
   const officers = DEPARTMENT_OFFICERS[agency] || DEPARTMENT_OFFICERS[INTAKE_AGENCIES[0]];
   return { agency, officer: officers[0].name, officerId: officers[0].id, password: '', mfa: '' };
@@ -2077,7 +2704,7 @@ function marketForAgency(agency) {
 
 function withWorkflowCompleteness(packet, mode, step) {
   if (mode !== 'intake') return packet;
-  const completeness = packet.status === 'Submitted to DICRI' || step === 10 ? 100 : STEP_COMPLETENESS[step] || packet.completeness;
+  const completeness = packet.status === 'Submitted to DICRI' || step === 10 || step >= 8 ? submittedCompleteness(packet) : STEP_COMPLETENESS[step] || packet.completeness;
   const status = step === 10 ? 'Submitted to DICRI' : packet.status;
   return { ...packet, completeness, status };
 }

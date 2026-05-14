@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Building2,
   ChevronRight,
+  Database,
   LayoutDashboard,
   MonitorPlay,
   ShieldCheck,
@@ -11,6 +12,7 @@ import {
 import SecureIntakeTrustGatesDemo from './demos/SecureIntakeTrustGatesDemo.jsx';
 import GovernmentIntakeDemo from './demos/GovernmentIntakeDemo.jsx';
 import ClientPortalDemo from './demos/ClientPortalDemo.jsx';
+import BackendControlPlane from './demos/BackendControlPlane.jsx';
 
 const DEMOS = [
   {
@@ -45,6 +47,17 @@ const DEMOS = [
     icon: Users,
     accent: 'green',
     Component: ClientPortalDemo,
+  },
+  {
+    id: 'backend-control-plane',
+    name: 'DICRI Backend Control Plane',
+    shortName: 'Backend',
+    purpose: 'Internal certification backend and mature-market owner-operated backend for packets, segments, evidence, trust gates, review, and certificate governance.',
+    source: 'src/demos/BackendControlPlane.jsx',
+    status: 'New module',
+    icon: Database,
+    accent: 'blue',
+    Component: BackendControlPlane,
   },
 ];
 
@@ -127,7 +140,7 @@ function Launcher({ onSelectDemo }) {
                 Each demo remains a local React view with its own state and visual treatment. Use the console bar to switch without changing ports.
               </p>
               <div className="mt-8 grid grid-cols-3 gap-3">
-                <Metric label="Demos" value="3" />
+                <Metric label="Demos" value="4" />
                 <Metric label="Backend" value="None" />
                 <Metric label="State" value="Local" />
               </div>

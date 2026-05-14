@@ -1,8 +1,6 @@
-# DICRI Resilience SaaS Investor Demo
+# Equinox Telecom Resilience Backend Demo
 
-Standalone React + Vite demo for the mature-market SaaS wedge:
-
-> DICRI is an infrastructure resilience platform that closes the trust gap between owners, vendors, OEMs, field workers, and certified infrastructure records.
+Standalone React + Vite demo for an Equinox Telecom owner/client backend with DICRI positioned as the independent review and certification authority.
 
 ## Setup
 
@@ -21,45 +19,31 @@ http://localhost:8097
 
 ## Demo Narrative
 
-DICRI is presented as a Trust Layer for Infrastructure Resilience. Owners already pay for field verification, locate work, repair work, and closeout evidence, but they often cannot validate whether the right worker used the right equipment, followed the right method, and produced trustworthy evidence. DICRI turns that assumption into an auditable trust record.
+Equinox Telecom manages owner-side infrastructure resilience workflows: segment governance, field evidence, equipment registry visibility, exception review, lifecycle risk trends, and worker/team quality insights.
 
-This is not generic dig-ticket software. The demo shows software-enforced trust gates that prove critical field work was performed by trusted workers, using registered and calibration-valid equipment, under governed workflows, with auditable evidence.
+DICRI appears only as the independent review/certification authority. Equinox can send evidence packets to DICRI Review, view review status, respond to evidence requests, and view returned certified records. The client UI does not issue certificates.
 
 ## Pages Included
 
 - Executive Dashboard
 - Trust Gate Workflow
-- Dig Notice / Locate Governance
-- Health Certificate Workflow
+- Locate Governance Audit Log
 - OEM / Equipment Registry
-- Certified Partner View
-- Adjudication Queue
-- Certificate / Audit Packet Preview
+- Exception Review Queue
+- Segment Risk Trends
+- Field Quality Insights
+- DICRI Review
 
 ## Local Data
 
 All data is synthetic and local to the React app:
 
-- 10 dig notice / locate governance tickets
+- 10 governed segments / locate notice audit records
 - 8 registered devices
-- 6 workers
-- 3 certified partners
-- 5 certificate and audit packet records
-
-## Positioning
-
-Key demo phrases included in-product:
-
-- Infrastructure Resilience Governance
-- Trust Layer for Field Execution
-- Trusted Worker. Trusted Device. Governed Evidence.
-- DICRI turns field execution from an assumption into evidence.
-- The industry has digitized workflows. It has not fully governed trust.
-- DICRI does not replace existing ticketing systems. It makes the field activity behind them verifiable.
-- Certification-grade evidence. Lifecycle trust. Infrastructure resilience.
+- 6 trusted workers
+- 5 DICRI review packets
+- Region, equipment, status, team, worker, and risk filters
 
 ## Product Framing
 
-AI is framed as an assistant only:
-
-> AI assists segmentation, evidence completeness review, anomaly detection, and routing. Certification authority remains governed by DICRI's approved human and policy framework.
+The client backend focuses on owner-side governance and operational intelligence. DICRI remains independent and is not represented as a client-controlled certificate issuer.

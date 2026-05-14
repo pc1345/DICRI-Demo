@@ -53,6 +53,7 @@ const PORTAL_USERS_BY_ROLE = {
 };
 
 const PORTAL_REPORTING_WINDOWS = ['Last 30 days', 'Last 60 days', 'Last 90 days', 'All time'];
+const OPERATING_MODES = ['Owner-Operated SaaS', 'DICRI-Assured Certification'];
 
 const SEGMENTS = [
   {
@@ -277,11 +278,16 @@ const NOTICES = [
 ];
 
 const AUDIT_EVENTS = [
-  { time: '2026-05-12 10:42', object: 'SEG-PH-ELK-001', event: 'Evidence packet accepted', actor: 'Cheetah Team PH-02', status: 'Verified' },
-  { time: '2026-05-12 10:48', object: 'SEG-PH-ELK-001', event: 'Equipment registry validation completed', actor: 'DICRI Policy Engine', status: 'Verified' },
-  { time: '2026-05-12 11:03', object: 'DICRI-BC-2026-00184', event: 'Certificate published to client portal', actor: 'Tiger Review Desk', status: 'Recorded' },
-  { time: '2026-05-12 11:11', object: 'SEG-PH-ABA-044', event: 'Risk exception opened', actor: 'DICRI Risk Desk', status: 'Exception' },
-  { time: '2026-05-13 14:10', object: 'SEG-PH-TRA-002', event: 'Supplemental note requested', actor: 'Tiger Review Desk', status: 'Pending' },
+  { time: '2026-05-12 08:41', object: 'APP-DICRI-NG-PH-014', event: 'App instance authorization verified', actor: 'DICRI Policy Engine', status: 'VERIFIED' },
+  { time: '2026-05-12 08:45', object: 'SEG-PH-ELK-001', event: 'Offline work package synced to field device', actor: 'Authorized field app instance', status: 'PENDING SYNC' },
+  { time: '2026-05-12 10:42', object: 'SEG-PH-ELK-001', event: 'Evidence captured within offline trust window', actor: 'Cheetah Team PH-02', status: 'RECORDED' },
+  { time: '2026-05-12 10:44', object: 'SEG-PH-ELK-001', event: 'Evidence packet received by backend', actor: 'DICRI Evidence Intake', status: 'RECEIVED' },
+  { time: '2026-05-12 10:48', object: 'SEG-PH-ELK-001', event: 'Equipment registry and calibration validation completed', actor: 'DICRI Policy Engine', status: 'VERIFIED' },
+  { time: '2026-05-12 10:56', object: 'SEG-PH-ELK-001', event: 'Evidence packet marked policy-admissible', actor: 'DICRI Review Framework', status: 'ADMISSIBLE' },
+  { time: '2026-05-12 11:03', object: 'DICRI-BC-2026-00184', event: 'DICRI-certified record published to client view', actor: 'DICRI Certification Authority', status: 'RECORDED' },
+  { time: '2026-05-12 11:11', object: 'SEG-PH-ABA-044', event: 'Exception review opened', actor: 'DICRI Risk Desk', status: 'EXCEPTION' },
+  { time: '2026-05-12 11:18', object: 'SEG-PH-ABA-044', event: 'Evidence packet pending validation', actor: 'DICRI Evidence Intake', status: 'PENDING' },
+  { time: '2026-05-13 14:10', object: 'SEG-PH-TRA-002', event: 'Supplemental note requested', actor: 'DICRI Review Desk', status: 'PENDING' },
 ];
 
 const SEGMENT_WINDOW_DAYS = {
@@ -308,17 +314,78 @@ const INITIAL_PORTAL_LOGIN = {
   mfa: '',
 };
 
+function portfolioSegments(portfolio) {
+  return SEGMENTS.filter((segment) => portfolio === 'All' || segment.portfolio === portfolio);
+}
+
+function segmentOptionsForPortfolio(portfolio) {
+  return ['All', ...portfolioSegments(portfolio).map((segment) => segment.id)];
+}
+
+function segmentScopeLabel(filters, scopedSegments, selectedSegment) {
+  if (filters.segmentId === 'All') return scopedSegments.length > 1 ? 'All Segments' : selectedSegment.id;
+  return selectedSegment.id;
+}
+
+function selectedCorridorLabel(filters, scopedSegments, selectedSegment) {
+  if (filters.segmentId !== 'All') return selectedSegment.corridor;
+  const corridors = [...new Set(scopedSegments.map((segment) => segment.corridor))];
+  if (corridors.length === 1) return corridors[0];
+  if (filters.portfolio !== 'All') return scopedSegments[0]?.corridor || 'Portfolio View';
+  return 'Portfolio View';
+}
+
+function selectedOrganizationLabel(filters, scopedSegments, selectedSegment, fallback) {
+  if (filters.segmentId !== 'All') return selectedSegment.owner || fallback;
+  const owners = [...new Set(scopedSegments.map((segment) => segment.owner).filter(Boolean))];
+  if (owners.length === 1) return owners[0];
+  return filters.portfolio === 'All' ? fallback : filters.portfolio;
+}
+
+function selectedConfidenceLabel(filters, scopedSegments, selectedSegment) {
+  if (filters.segmentId !== 'All' || scopedSegments.length === 1) return `${selectedSegment.asce} / ${selectedSegment.confidence}%`;
+  const certified = scopedSegments.filter((segment) => segment.confidence);
+  const average = certified.length ? Math.round(certified.reduce((sum, segment) => sum + segment.confidence, 0) / certified.length) : 0;
+  return average ? `Portfolio avg / ${average}%` : 'Portfolio View';
+}
+
+function certificateCoverageFromSegments(segments) {
+  const fullyCertified = segments.filter((segment) => segment.certificateStatus === 'Certified' || segment.certificateStatus === 'Conditionally Certified').length;
+  const inReview = segments.filter((segment) => ['In Review', 'Pre-Cert'].includes(segment.status) || segment.certificateStatus === 'Under Review').length;
+  const watchlist = segments.filter((segment) => segment.status === 'Quarantine' && segment.certificateStatus !== 'Conditionally Certified').length;
+  const totalCertificateScope = fullyCertified + inReview + watchlist;
+  const certifiedPercent = totalCertificateScope ? Math.round((fullyCertified / totalCertificateScope) * 100) : 0;
+  return {
+    fullyCertified,
+    inReview,
+    watchlist,
+    totalCertificateScope,
+    certifiedPercent,
+  };
+}
+
+function evidenceStatusForSegment(segment) {
+  if (segment.certificateStatus === 'Certified' || segment.certificateStatus === 'Conditionally Certified') return 'Policy-Admissible';
+  if (segment.certificateStatus === 'Under Review' || segment.status === 'In Review') return 'Pending Validation';
+  if (segment.status === 'Quarantine') return 'Exception Evidence';
+  if (segment.status === 'Pre-Cert') return 'Raw Captured';
+  return 'Raw Captured';
+}
+
+function policyAdmissibleSegments(segments) {
+  return segments.filter((segment) => evidenceStatusForSegment(segment) === 'Policy-Admissible');
+}
+
 export default function ClientPortalDemo() {
   const [authenticated, setAuthenticated] = useState(false);
   const [portalUser, setPortalUser] = useState(INITIAL_PORTAL_LOGIN);
   const [loginForm, setLoginForm] = useState(INITIAL_PORTAL_LOGIN);
   const [activeTab, setActiveTab] = useState('overview');
+  const [operatingMode, setOperatingMode] = useState('Owner-Operated SaaS');
   const [filters, setFilters] = useState(INITIAL_FILTERS);
   const [selectedSegmentId, setSelectedSegmentId] = useState(INITIAL_FILTERS.segmentId);
   const [modal, setModal] = useState(null);
   const [reviewedNotices, setReviewedNotices] = useState(new Set());
-
-  const selectedSegment = SEGMENTS.find((segment) => segment.id === selectedSegmentId) || SEGMENTS[0];
 
   const filteredSegments = useMemo(() => {
     return SEGMENTS.filter((segment) => {
@@ -331,7 +398,15 @@ export default function ClientPortalDemo() {
     });
   }, [filters]);
 
-  const scopedSegments = filteredSegments.length ? filteredSegments : [selectedSegment];
+  const portfolioScopedSegments = useMemo(() => portfolioSegments(filters.portfolio), [filters.portfolio]);
+  const selectedSegment = filters.segmentId !== 'All'
+    ? SEGMENTS.find((segment) => segment.id === filters.segmentId && (filters.portfolio === 'All' || segment.portfolio === filters.portfolio)) || filteredSegments[0] || portfolioScopedSegments[0] || SEGMENTS[0]
+    : filteredSegments[0] || portfolioScopedSegments[0] || SEGMENTS[0];
+  const scopedSegments = filteredSegments;
+  const activeSegmentLabel = segmentScopeLabel(filters, scopedSegments, selectedSegment);
+  const selectedCorridor = selectedCorridorLabel(filters, scopedSegments, selectedSegment);
+  const activeOrganization = selectedOrganizationLabel(filters, scopedSegments, selectedSegment, portalUser.organization);
+  const activeConfidence = selectedConfidenceLabel(filters, scopedSegments, selectedSegment);
   const selectedNotices = NOTICES.filter((notice) => notice.segmentId === selectedSegment.id);
   const certifiedSegments = scopedSegments.filter((segment) => segment.certNo !== 'Not Issued');
   const avgIntegrity = certifiedSegments.length
@@ -339,9 +414,20 @@ export default function ClientPortalDemo() {
     : selectedSegment.integrity;
 
   const updateFilter = (key, value) => {
-    setFilters((current) => ({ ...current, [key]: value }));
+    setFilters((current) => {
+      if (key === 'portfolio') {
+        return { ...current, portfolio: value, segmentId: 'All' };
+      }
+      return { ...current, [key]: value };
+    });
+    if (key === 'portfolio') {
+      setSelectedSegmentId('All');
+      return;
+    }
     if (key === 'segmentId' && value !== 'All') {
       setSelectedSegmentId(value);
+    } else if (key === 'segmentId') {
+      setSelectedSegmentId('All');
     }
   };
 
@@ -381,7 +467,14 @@ export default function ClientPortalDemo() {
 
   return (
     <div className="min-h-screen bg-[#020617] text-slate-100 font-sans antialiased">
-      <PortalHeader segment={selectedSegment} openModal={setModal} portalUser={portalUser} />
+      <PortalHeader
+        segment={selectedSegment}
+        activeSegmentLabel={activeSegmentLabel}
+        activeOrganization={activeOrganization}
+        activeConfidence={activeConfidence}
+        openModal={setModal}
+        portalUser={portalUser}
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-[248px_1fr] min-h-[calc(100vh-76px)]">
         <aside className="bg-[#0B1120] border-r border-white/10 p-4 xl:p-5 space-y-4">
@@ -411,6 +504,7 @@ export default function ClientPortalDemo() {
           <FilterBar
             filters={filters}
             selectedSegment={selectedSegment}
+            selectedCorridor={selectedCorridor}
             updateFilter={updateFilter}
             reset={resetFilters}
           />
@@ -427,7 +521,9 @@ export default function ClientPortalDemo() {
               onOpenNotice={openNotice}
               onViewScoreLogic={() => setActiveTab('scorecard')}
               reportingWindow={filters.dateRange}
-              totalSegments={SEGMENTS.filter((segment) => segmentInReportingWindow(segment, filters.dateRange)).length}
+              totalSegments={portfolioSegments(filters.portfolio).filter((segment) => segmentInReportingWindow(segment, filters.dateRange)).length}
+              operatingMode={operatingMode}
+              setOperatingMode={setOperatingMode}
             />
           )}
 
@@ -570,7 +666,7 @@ function SecureInput({ label, value, onChange, type = 'text', placeholder }) {
   );
 }
 
-function PortalHeader({ segment, openModal, portalUser }) {
+function PortalHeader({ segment, activeSegmentLabel, activeOrganization, activeConfidence, openModal, portalUser }) {
   return (
     <header className="min-h-[76px] bg-[#08111f] border-b border-white/10 px-4 md:px-6 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3 sticky top-0 z-40">
       <div className="flex items-center gap-4 min-w-0">
@@ -582,9 +678,9 @@ function PortalHeader({ segment, openModal, portalUser }) {
       </div>
       <div className="flex flex-wrap items-center gap-2.5">
         <HeaderChip label="Portal Role" value={portalRoleBadge(portalUser.role)} />
-        <HeaderChip label="Organization" value={portalUser.organization} />
-        <HeaderChip label="Active Segment" value={segment.id} />
-        <HeaderChip label="ASCE Confidence" value={`${segment.asce} / ${segment.confidence}%`} />
+        <HeaderChip label="Organization" value={activeOrganization} />
+        <HeaderChip label="Active Segment" value={activeSegmentLabel} />
+        <HeaderChip label="ASCE Confidence" value={activeConfidence} />
         <button onClick={() => openModal({ type: 'access' })} className="rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-3 text-[11px] font-black uppercase tracking-widest text-white shadow-lg shadow-blue-950/30 flex items-center gap-2">
           <Lock size={14} />
           Access Scope
@@ -635,13 +731,13 @@ function AccountScopeCard({ portalUser }) {
   );
 }
 
-function FilterBar({ filters, selectedSegment, updateFilter, reset }) {
+function FilterBar({ filters, selectedSegment, selectedCorridor, updateFilter, reset }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-slate-900/75 p-4 shadow-2xl">
       <div className="flex flex-col 2xl:flex-row 2xl:items-end justify-between gap-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 flex-1">
-          <SelectField label="Portfolio" value={filters.portfolio} onChange={(value) => updateFilter('portfolio', value)} options={['All', 'Rivers State Fiber', 'Lagos Urban Infra']} />
-          <SelectField label="Segment" value={filters.segmentId} onChange={(value) => updateFilter('segmentId', value)} options={['All', ...SEGMENTS.map((segment) => segment.id)]} />
+          <SelectField label="Portfolio" value={filters.portfolio} onChange={(value) => updateFilter('portfolio', value)} options={['All', ...new Set(SEGMENTS.map((segment) => segment.portfolio))]} />
+          <SelectField label="Segment" value={filters.segmentId} onChange={(value) => updateFilter('segmentId', value)} options={segmentOptionsForPortfolio(filters.portfolio)} />
           <SelectField label="Certificate" value={filters.certificateType} onChange={(value) => updateFilter('certificateType', value)} options={['All', 'Birth Certificate', 'Health Certificate', 'Pre-Certification']} />
           <SelectField label="Status" value={filters.status} onChange={(value) => updateFilter('status', value)} options={['All', 'Active', 'In Review', 'Quarantine', 'Pre-Cert']} />
           <SelectField label="Reporting Window" value={filters.dateRange} onChange={(value) => updateFilter('dateRange', value)} options={PORTAL_REPORTING_WINDOWS} />
@@ -649,7 +745,7 @@ function FilterBar({ filters, selectedSegment, updateFilter, reset }) {
         <div className="flex items-center gap-2 shrink-0">
           <div className="hidden lg:block rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3">
             <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Selected</p>
-            <p className="text-xs font-black text-white mt-1">{selectedSegment.corridor}</p>
+            <p className="text-xs font-black text-white mt-1">{selectedCorridor}</p>
           </div>
           <button onClick={reset} className="rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-300">Reset</button>
         </div>
@@ -658,12 +754,15 @@ function FilterBar({ filters, selectedSegment, updateFilter, reset }) {
   );
 }
 
-function SegmentOverview({ segments, selectedSegment, selectedNotices, avgIntegrity, reviewedNotices, onSelectSegment, onOpenModal, onOpenNotice, onViewScoreLogic, reportingWindow, totalSegments }) {
-  const certifiedCount = segments.filter((segment) => segment.certNo !== 'Not Issued').length;
-  const underReviewCount = segments.filter((segment) => ['In Review', 'Pre-Cert'].includes(segment.status)).length;
-  const avgConfidence = segments.length ? segments.reduce((sum, segment) => sum + segment.confidence, 0) / segments.length : 0;
-  const avgResilience = segments.length ? segments.reduce((sum, segment) => sum + (segment.resilienceScore || 0), 0) / segments.length : 0;
-  const highRiskCount = segments.filter((segment) => segment.risk === 'High').length;
+function SegmentOverview({ segments, selectedSegment, selectedNotices, avgIntegrity, reviewedNotices, onSelectSegment, onOpenModal, onOpenNotice, onViewScoreLogic, reportingWindow, totalSegments, operatingMode, setOperatingMode }) {
+  const certificateCoverage = certificateCoverageFromSegments(segments);
+  const certifiedCount = certificateCoverage.fullyCertified;
+  const underReviewCount = certificateCoverage.inReview;
+  const admissibleSegments = policyAdmissibleSegments(segments);
+  const certifiedMetricSegments = admissibleSegments.length ? admissibleSegments : segments;
+  const avgConfidence = certifiedMetricSegments.length ? certifiedMetricSegments.reduce((sum, segment) => sum + segment.confidence, 0) / certifiedMetricSegments.length : 0;
+  const avgResilience = certifiedMetricSegments.length ? certifiedMetricSegments.reduce((sum, segment) => sum + (segment.resilienceScore || 0), 0) / certifiedMetricSegments.length : 0;
+  const highRiskCount = certificateCoverage.watchlist;
   const openExceptions = segments.reduce((sum, segment) => sum + segment.exceptions, 0);
   const pendingReviews = segments.filter((segment) => ['In Review', 'Pre-Cert'].includes(segment.status) || segment.certificateStatus === 'Under Review').length;
   const expiringSoon = segments.filter((segment) => segment.certNo !== 'Not Issued' && segment.certificateReviewDate !== 'Pending' && segment.certificateReviewDate !== 'Under exception review').length;
@@ -678,7 +777,24 @@ function SegmentOverview({ segments, selectedSegment, selectedNotices, avgIntegr
           <h2 className="mt-1 text-xl font-black text-white">Certification confidence and infrastructure resilience are tracked separately.</h2>
           <p className="mt-1 text-xs text-slate-400">Reporting window: {reportingWindow}. Showing top {segments.length} of {totalSegments} records in the selected window.</p>
         </div>
-        <GhostButton icon={Gauge} onClick={onViewScoreLogic}>View score logic</GhostButton>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3">
+            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-500">Operating Mode</label>
+            <select value={operatingMode} onChange={(event) => setOperatingMode(event.target.value)} className="mt-1 bg-transparent text-xs font-black text-blue-300 outline-none">
+              {OPERATING_MODES.map((mode) => <option key={mode} className="bg-slate-950">{mode}</option>)}
+            </select>
+          </div>
+          <GhostButton icon={Gauge} onClick={onViewScoreLogic}>View score logic</GhostButton>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4">
+        <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-300">Owner dashboard visibility / DICRI review authority / Certificate issuance authority</p>
+        <p className="mt-2 text-sm leading-relaxed text-slate-300">
+          {operatingMode === 'Owner-Operated SaaS'
+            ? 'Owner-operated SaaS lets the client manage evidence, view governance status, and submit packets to DICRI Review. DICRI controls certification review and certificate issuance.'
+            : 'DICRI-assured certification uses DICRI or certified partners for independent assurance, review, and certificate issuance where third-party trust is required.'}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-4">
@@ -693,10 +809,16 @@ function SegmentOverview({ segments, selectedSegment, selectedNotices, avgIntegr
         <MetricCard icon={Activity} label="Regional Risk Trend" value={trendLabel} trend={selectedSegment.corridor} tone={recentTrend < -1 ? 'gold' : 'teal'} />
       </div>
 
+      <div className="rounded-2xl border border-white/10 bg-slate-900/75 p-4 shadow-2xl">
+        <p className="text-sm leading-relaxed text-slate-300">
+          Only policy-admissible evidence contributes to certified metrics, resilience scores, and certificate status. Raw, pending, exception, or rejected evidence remains available for audit but does not influence certified outputs.
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.7fr)_420px] gap-5 items-start">
         <div className="space-y-5 min-w-0">
           <div className="grid grid-cols-1 xl:grid-cols-[0.95fr_1.05fr] gap-5">
-            <CoverageDonut segments={segments} />
+            <CoverageDonut coverage={certificateCoverage} />
             <IntegrityTrend segment={selectedSegment} />
           </div>
 
@@ -759,6 +881,7 @@ function SelectedSegmentCard({ segment, notices, onOpenModal, onOpenNotice }) {
         <CompactInfo label="Crew" value={segment.crew} wide />
         <CompactInfo label="Expected Completion" value={segment.expectedCompletion} />
         <CompactInfo label="Last Field Activity" value={segment.lastActivity} wide />
+        <CompactInfo label="Evidence Status" value={evidenceStatusForSegment(segment)} tone={evidenceStatusForSegment(segment) === 'Policy-Admissible' ? 'green' : 'amber'} />
         <CompactInfo label="Exceptions" value={`${segment.exceptions} open - ${segment.exceptionText}`} tone={riskTone(segment.risk)} wide />
       </div>
 
@@ -818,6 +941,7 @@ function SegmentTable({ data, selectedId, onSelect, onView, onCertificate }) {
             <th className="px-4 py-3">Lifecycle</th>
             <th className="px-4 py-3">ASCE / Confidence</th>
             <th className="px-4 py-3">Evidence</th>
+            <th className="px-4 py-3">Evidence Status</th>
             <th className="px-4 py-3">Readiness</th>
             <th className="px-4 py-3">Risk</th>
             <th className="px-4 py-3 text-right">Actions</th>
@@ -833,6 +957,7 @@ function SegmentTable({ data, selectedId, onSelect, onView, onCertificate }) {
               <td className="px-4 py-4"><LifecycleBadge value={segment.lifecycle} /></td>
               <td className="px-4 py-4 text-sm text-slate-300">{segment.asce} / {segment.confidence}%</td>
               <td className="px-4 py-4"><MiniProgress value={segment.evidence} /></td>
+              <td className="px-4 py-4"><StatusPill value={evidenceStatusForSegment(segment)} tone={evidenceStatusForSegment(segment) === 'Policy-Admissible' || evidenceStatusForSegment(segment) === 'Certified Record' ? 'green' : evidenceStatusForSegment(segment) === 'Rejected' ? 'red' : 'amber'} /></td>
               <td className="px-4 py-4"><MiniProgress value={segment.readiness} tone="green" /></td>
               <td className="px-4 py-4"><RiskBadge value={segment.risk} /></td>
               <td className="px-4 py-4 text-right">
@@ -1143,7 +1268,7 @@ function AlertsPanel({ notices, reviewedNotices, onOpenNotice, onSelectSegment }
 
 function AuditTrail({ events, selectedSegment }) {
   return (
-    <SectionFrame title="Audit Trail" subtitle={`Context for ${selectedSegment.id}; hashes and evidence links are masked.`}>
+    <SectionFrame title="Audit Trail" subtitle={`Audit trail for ${selectedSegment.id}. Evidence hashes and source links are masked in the client view.`}>
       <div className="p-4 space-y-3">
         {events.map((event) => (
           <div key={`${event.time}-${event.event}`} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1152,7 +1277,7 @@ function AuditTrail({ events, selectedSegment }) {
               <p className="text-sm font-black text-white mt-2">{event.event}</p>
               <p className="text-xs text-slate-500 mt-1">{event.actor}</p>
             </div>
-            <StatusPill value={event.status} tone={event.status === 'Exception' ? 'red' : event.status === 'Pending' ? 'amber' : 'green'} />
+            <StatusPill value={event.status} tone={auditStatusTone(event.status)} />
           </div>
         ))}
       </div>
@@ -1160,22 +1285,28 @@ function AuditTrail({ events, selectedSegment }) {
   );
 }
 
-function CoverageDonut({ segments }) {
-  const certified = segments.filter((segment) => segment.status === 'Active').length;
-  const review = segments.filter((segment) => segment.status === 'In Review' || segment.status === 'Pre-Cert').length;
-  const watch = segments.filter((segment) => segment.status === 'Quarantine').length;
-  const total = Math.max(segments.length, 1);
-  const certifiedPct = Math.round((certified / total) * 100);
-  const reviewPct = Math.round((review / total) * 100);
+function auditStatusTone(status) {
+  if (status === 'EXCEPTION' || status === 'REJECTED') return 'red';
+  if (status === 'PENDING' || status === 'PENDING SYNC') return 'amber';
+  if (status === 'RECEIVED' || status === 'RECORDED') return 'blue';
+  if (status === 'VERIFIED' || status === 'ADMISSIBLE') return 'green';
+  return 'blue';
+}
+
+function CoverageDonut({ coverage }) {
+  const certified = coverage.fullyCertified;
+  const review = coverage.inReview;
+  const watch = coverage.watchlist;
+  const certifiedPct = coverage.certifiedPercent;
+  const reviewPct = coverage.totalCertificateScope ? Math.round((review / coverage.totalCertificateScope) * 100) : 0;
   const watchPct = Math.max(0, 100 - certifiedPct - reviewPct);
-  const dash = `${certifiedPct} ${reviewPct} ${watchPct}`;
 
   return (
     <section className="rounded-2xl border border-white/10 bg-slate-900/75 p-5 shadow-2xl">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-black text-white">Certificate Coverage</h3>
-          <p className="text-xs text-slate-500 mt-1">Fully Certified / In Review / Watchlist</p>
+          <p className="text-xs text-slate-500 mt-1">Visible certificate scope: {coverage.totalCertificateScope} segments</p>
         </div>
         <Award size={20} className="text-blue-400" />
       </div>
@@ -1183,7 +1314,7 @@ function CoverageDonut({ segments }) {
         <div className="relative h-40 w-40">
           <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
             <circle cx="60" cy="60" r="45" fill="none" stroke="#111827" strokeWidth="18" />
-            <circle cx="60" cy="60" r="45" fill="none" stroke="#22C55E" strokeWidth="18" pathLength="100" strokeDasharray={`${dash.split(' ')[0]} 100`} strokeDashoffset="0" />
+            <circle cx="60" cy="60" r="45" fill="none" stroke="#22C55E" strokeWidth="18" pathLength="100" strokeDasharray={`${certifiedPct} 100`} strokeDashoffset="0" />
             <circle cx="60" cy="60" r="45" fill="none" stroke="#D4A100" strokeWidth="18" pathLength="100" strokeDasharray={`${reviewPct} 100`} strokeDashoffset={`-${certifiedPct}`} />
             <circle cx="60" cy="60" r="45" fill="none" stroke="#EF4444" strokeWidth="18" pathLength="100" strokeDasharray={`${watchPct} 100`} strokeDashoffset={`-${certifiedPct + reviewPct}`} />
           </svg>
@@ -1197,7 +1328,7 @@ function CoverageDonut({ segments }) {
           <LegendRow color="bg-amber-500" label="In Review" value={`${review} segments`} />
           <LegendRow color="bg-red-500" label="Watchlist" value={`${watch} segments`} />
           <div className="pt-3 border-t border-white/10">
-            <p className="text-xs text-slate-400 leading-relaxed">Coverage reflects visible client scope only. Field artifacts and exact locations are withheld.</p>
+            <p className="text-xs text-slate-400 leading-relaxed">Coverage and metric cards reflect the same visible certificate scope. Field artifacts and exact locations are withheld.</p>
           </div>
         </div>
       </div>

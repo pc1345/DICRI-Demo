@@ -196,7 +196,7 @@ const DEVICE_SCENARIOS = {
     lastCalibration: '2026-03-01',
     calibrationDue: '2026-05-01',
     custody: 'Organization-authorized / session not permitted',
-    message: 'Equipment certificate expired. Unable to continue with this equipment.'
+    message: 'Capture blocked. This equipment is not authorized for this app instance or assignment. Contact DICRI operations to update the authorization profile.'
   },
   unregistered: {
     label: 'Unregistered Device',
@@ -210,8 +210,38 @@ const DEVICE_SCENARIOS = {
     lastCalibration: 'Unknown',
     calibrationDue: 'Unknown',
     custody: 'Not authorized',
-    message: 'No registry match found. Device cannot be used for certification-grade capture.'
+    message: 'Capture blocked. This equipment is not authorized for this app instance or assignment. Contact DICRI operations to update the authorization profile.'
   }
+};
+
+const METHOD_ASSURANCE_CHECKS = {
+  photo: ['In-app camera only', 'Registered tablet/phone', 'Location gate', 'Timestamp', 'Evidence hash', 'No gallery upload for certified evidence'],
+  measuring_rod: ['Assigned point', 'In-app photo', 'Measurement value', 'Visible measurement context', 'Device inspection/calibration if digital', 'Tolerance check'],
+  gpr: ['Scan path', 'Start/end location', 'Registered GPR unit', 'Device self-test/calibration', 'Raw scan file present', 'Soil/interference notes'],
+  drone: ['GNSS quality', 'Flight telemetry', 'Flight location envelope', 'Operator license', 'Registered drone', 'Sensor status'],
+  lidar: ['Scan origin', 'Point cloud completeness', 'Registered LiDAR device', 'Sensor calibration', 'Raw point cloud preserved'],
+  spatial_capture: ['Capture origin', 'Scan path', 'Registered spatial device', 'Time/location continuity', 'Raw spatial file preserved', 'Evidence integrity'],
+};
+
+const locationAssurance = ({ state, geofenceResult, distanceKm, gnssQuality, timeCheck = 'passed', networkSanityCheck = 'passed', spoofingIndicators = 'none_detected', assignmentLocationMatch = true, reason }) => {
+  const labels = {
+    verified: 'Verified',
+    warning: 'Warning',
+    degraded: 'Degraded',
+    failed: 'Failed'
+  };
+  return {
+    state,
+    label: labels[state],
+    geofenceResult,
+    distanceKm,
+    gnssQuality,
+    timeCheck,
+    networkSanityCheck,
+    spoofingIndicators,
+    assignmentLocationMatch,
+    reason
+  };
 };
 
 const SEGMENTS = [
@@ -221,8 +251,10 @@ const SEGMENTS = [
     workOrder: 'WO-78452',
     assignment: 'Assigned',
     distanceKm: 0.3,
-    geofence: 'Matched',
+    locationAssurance: locationAssurance({ state: 'verified', geofenceResult: 'matched', distanceKm: 0.3, gnssQuality: 'acceptable' }),
+    captureMethod: 'spatial_capture',
     window: 'Open',
+    offlineStatus: 'Loaded',
     evidencePlan: 'Depth + Photo + Spatial Capture',
     status: 'Open'
   },
@@ -232,8 +264,10 @@ const SEGMENTS = [
     workOrder: 'WO-78453',
     assignment: 'Assigned',
     distanceKm: 1.1,
-    geofence: 'Matched',
+    locationAssurance: locationAssurance({ state: 'verified', geofenceResult: 'matched', distanceKm: 1.1, gnssQuality: 'strong' }),
+    captureMethod: 'measuring_rod',
     window: 'Open',
+    offlineStatus: 'Loaded',
     evidencePlan: 'Photo + Measuring Rod',
     status: 'Open'
   },
@@ -243,11 +277,13 @@ const SEGMENTS = [
     workOrder: 'WO-79118',
     assignment: 'Assigned',
     distanceKm: 18.7,
-    geofence: 'Too Far',
+    locationAssurance: locationAssurance({ state: 'failed', geofenceResult: 'outside', distanceKm: 18.7, gnssQuality: 'acceptable', assignmentLocationMatch: false, reason: 'Outside approved location envelope' }),
+    captureMethod: 'lidar',
     window: 'Open',
+    offlineStatus: 'Not Available',
     evidencePlan: 'OTDR + Spatial Capture',
     status: 'Locked',
-    reason: 'Outside approved geofence'
+    reason: 'Outside approved location envelope'
   },
   {
     id: 'SEG-A1-NST-00092',
@@ -255,11 +291,13 @@ const SEGMENTS = [
     workOrder: 'WO-79990',
     assignment: 'Not Assigned',
     distanceKm: 0.6,
-    geofence: 'Nearby',
+    locationAssurance: locationAssurance({ state: 'warning', geofenceResult: 'nearby', distanceKm: 0.6, gnssQuality: 'acceptable', assignmentLocationMatch: false, reason: 'Nearby, but not authorized for this segment' }),
+    captureMethod: 'gpr',
     window: 'Open',
+    offlineStatus: 'Not Available',
     evidencePlan: 'Photo + GPR',
     status: 'Locked',
-    reason: 'Not assigned to authenticated user'
+    reason: 'Nearby, but not authorized for this segment'
   },
   {
     id: 'SEG-A1-NST-00095',
@@ -267,8 +305,10 @@ const SEGMENTS = [
     workOrder: 'WO-80022',
     assignment: 'Assigned',
     distanceKm: 2.1,
-    geofence: 'Matched',
+    locationAssurance: locationAssurance({ state: 'degraded', geofenceResult: 'matched', distanceKm: 2.1, gnssQuality: 'weak', timeCheck: 'warning', networkSanityCheck: 'warning', reason: 'Capture window closed' }),
+    captureMethod: 'photo',
     window: 'Closed',
+    offlineStatus: 'Loaded',
     evidencePlan: 'Photo + OTDR',
     status: 'Locked',
     reason: 'Capture window closed'
@@ -297,6 +337,33 @@ const canUseEquipment = (persona, equipmentName) => {
   return { allowed: true, reason: 'Available' };
 };
 
+const assuranceStatus = (state) => {
+  if (state === 'verified') return 'green';
+  if (state === 'failed') return 'red';
+  return 'amber';
+};
+
+const methodFromEquipment = (equipmentName, segment) => {
+  if (equipmentName === 'Drone LiDAR') return 'drone';
+  if (equipmentName === 'GPR') return 'gpr';
+  if (equipmentName === 'Digital Measuring Rod' || equipmentName === 'Survey Pole') return 'measuring_rod';
+  if (equipmentName === 'Tablet / Photo Capture') return 'photo';
+  if (equipmentName === 'Handheld LiDAR') return segment?.captureMethod === 'spatial_capture' ? 'spatial_capture' : 'lidar';
+  return segment?.captureMethod || 'photo';
+};
+
+const titleCaseCheck = (value) => value
+  .replaceAll('_', ' ')
+  .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+const assuranceResultLabel = (value) => {
+  if (value === 'matched' || value === true || value === 'passed') return 'Verified';
+  if (value === 'nearby' || value === 'warning') return 'Warning';
+  if (value === 'outside' || value === false || value === 'failed') return 'Failed';
+  if (value === 'unknown' || value === 'not_available' || value === 'not_checked') return 'Degraded';
+  return titleCaseCheck(String(value));
+};
+
 const statusClasses = {
   green: 'bg-green-500/10 border-green-500/25 text-green-400',
   red: 'bg-red-500/10 border-red-500/25 text-red-400',
@@ -305,11 +372,85 @@ const statusClasses = {
   slate: 'bg-slate-800/50 border-white/5 text-slate-300'
 };
 
+const APP_PROFILE = {
+  appInstanceId: 'APP-DICRI-NG-PH-014',
+  assignedOrganization: 'Janvier Field Services',
+  assignedCrew: 'Cheetah PH-02 / Julius Okogie',
+  authorizedEquipment: 'Tablet, Digital Rod, GPR, Handheld LiDAR',
+  authorizedSegments: 'SEG-A1-NST-00073, SEG-A1-NST-00081',
+  lastAuthorizationSync: '2026-05-13 08:45',
+  offlineTrustWindow: '12 hours',
+  status: 'Active'
+};
+
+const OFFLINE_PACKAGE = {
+  segmentPackage: 'Loaded',
+  lastSync: '2026-05-13 08:45',
+  offlineTrustWindow: '12 hours',
+  trustWindowRemaining: '08h 17m',
+  segmentsAvailableOffline: '2 segments',
+  uploadStatus: 'Pending Sync'
+};
+
+const OPERATING_MODE_COPY = {
+  'Owner-Operated SaaS': 'Owner-operated mode: DICRI governs app access, equipment authorization, evidence admissibility, WORM handling, and dashboard visibility. Certificate issuance remains DICRI-controlled.',
+  'DICRI-Assured Certification': 'DICRI-assured mode: DICRI or a certified partner provides independent assurance, review, and certification authority where third-party trust is required.'
+};
+
+const SecureWorkflowShell = ({ children, view, persona, resetSimulation, operatingMode, setOperatingMode }) => (
+  <div className="min-h-screen bg-[#020617] text-slate-100 font-sans antialiased overflow-hidden flex flex-col">
+    <div className="bg-[#0B1120] border-b border-white/5 p-3 z-50 shrink-0 shadow-xl overflow-x-auto">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-6 min-w-max">
+        <div className="flex items-center space-x-2 text-blue-400">
+          <Terminal size={14} />
+          <span className="text-[10px] font-black uppercase tracking-[0.2em]">Secure Intake & Trust Gates Demo</span>
+          {persona && (
+            <span className="text-[10px] bg-blue-600 px-2 py-0.5 rounded text-white ml-2 uppercase">
+              {persona.role} Session
+            </span>
+          )}
+        </div>
+
+        <div className="hidden xl:flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2">
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Operating Mode</span>
+          <select value={operatingMode} onChange={(event) => setOperatingMode(event.target.value)} className="bg-transparent text-[10px] font-black uppercase tracking-widest text-blue-300 outline-none">
+            {Object.keys(OPERATING_MODE_COPY).map((mode) => <option key={mode} className="bg-slate-950">{mode}</option>)}
+          </select>
+        </div>
+
+        <div className="hidden lg:flex items-center gap-3 text-[9px] font-bold uppercase tracking-widest text-slate-500">
+          <span className={view === 'auth' ? 'text-blue-400' : ''}>Login</span>
+          <ChevronRight size={12} />
+          <span className={view === 'identity' ? 'text-blue-400' : ''}>Identity</span>
+          <ChevronRight size={12} />
+          <span className={['equipment_select', 'connect_equipment', 'equipment_result'].includes(view) ? 'text-blue-400' : ''}>Equipment</span>
+          <ChevronRight size={12} />
+          <span className={view === 'segment_select' ? 'text-blue-400' : ''}>Segment</span>
+          <ChevronRight size={12} />
+          <span className={view === 'field_calibration' ? 'text-blue-400' : ''}>Calibration</span>
+          <ChevronRight size={12} />
+          <span className={view === 'envelope' ? 'text-blue-400' : ''}>Envelope</span>
+          <ChevronRight size={12} />
+          <span className={view === 'capture' ? 'text-blue-400' : ''}>Capture</span>
+        </div>
+
+        <button onClick={resetSimulation} className="p-2 bg-slate-800 text-slate-400 hover:text-white rounded-xl transition-colors" title="Reset demo">
+          <RefreshCcw size={14} />
+        </button>
+      </div>
+    </div>
+
+    <div className="flex-1 flex items-center justify-center relative bg-slate-950 p-6">
+      {children}
+    </div>
+  </div>
+);
+
 const App = () => {
   const [view, setView] = useState('auth');
-  const [loginEmail, setLoginEmail] = useState('julius.entry@dicri.demo');
-  const [password, setPassword] = useState('');
-  const [mfa, setMfa] = useState('');
+  const [operatingMode, setOperatingMode] = useState('Owner-Operated SaaS');
+  const [selectedProfileId, setSelectedProfileId] = useState('julius.entry@dicri.demo');
+  const [loginForm, setLoginForm] = useState({ email: 'julius.entry@dicri.demo', password: '', mfaCode: '' });
   const [persona, setPersona] = useState(null);
   const [selectedEquipmentType, setSelectedEquipmentType] = useState(null);
   const [deviceScenario, setDeviceScenario] = useState(null);
@@ -321,9 +462,8 @@ const App = () => {
 
   const resetSimulation = () => {
     setView('auth');
-    setLoginEmail('julius.entry@dicri.demo');
-    setPassword('');
-    setMfa('');
+    setSelectedProfileId('julius.entry@dicri.demo');
+    setLoginForm({ email: 'julius.entry@dicri.demo', password: '', mfaCode: '' });
     setPersona(null);
     setSelectedEquipmentType(null);
     setDeviceScenario(null);
@@ -336,9 +476,18 @@ const App = () => {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    const resolvedPersona = PERSONAS[loginEmail] || PERSONAS['julius.entry@dicri.demo'];
+    const resolvedPersona = PERSONAS[loginForm.email] || PERSONAS[selectedProfileId] || PERSONAS['julius.entry@dicri.demo'];
     setPersona(resolvedPersona);
     setView('identity');
+  };
+
+  const updateLoginForm = (key, value) => {
+    setLoginForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const selectCredentialProfile = (email) => {
+    setSelectedProfileId(email);
+    setLoginForm((current) => ({ ...current, email }));
   };
 
   const handleSelectEquipment = (equipmentName) => {
@@ -380,7 +529,10 @@ const App = () => {
         time: new Date().toLocaleTimeString(),
         type: selectedEquipmentType,
         segment: selectedSegment?.id,
-        deviceCert: deviceScenario?.certificateNo
+        deviceCert: deviceScenario?.certificateNo,
+        evidenceStatus: 'Raw Captured',
+        admissibility: 'Pending Validation',
+        wormStatus: 'Ready'
       }, ...prev]);
       setIsCapturing(false);
     }, 600);
@@ -388,50 +540,8 @@ const App = () => {
 
   const deviceIsValid = deviceScenario?.severity === 'green';
 
-  const Shell = ({ children }) => (
-    <div className="min-h-screen bg-[#020617] text-slate-100 font-sans antialiased overflow-hidden flex flex-col">
-      <div className="bg-[#0B1120] border-b border-white/5 p-3 z-50 shrink-0 shadow-xl overflow-x-auto">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-6 min-w-max">
-          <div className="flex items-center space-x-2 text-blue-400">
-            <Terminal size={14} />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em]">Secure Intake & Trust Gates Demo</span>
-            {persona && (
-              <span className="text-[10px] bg-blue-600 px-2 py-0.5 rounded text-white ml-2 uppercase">
-                {persona.role} Session
-              </span>
-            )}
-          </div>
-
-          <div className="hidden lg:flex items-center gap-3 text-[9px] font-bold uppercase tracking-widest text-slate-500">
-            <span className={view === 'auth' ? 'text-blue-400' : ''}>Login</span>
-            <ChevronRight size={12} />
-            <span className={view === 'identity' ? 'text-blue-400' : ''}>Identity</span>
-            <ChevronRight size={12} />
-            <span className={['equipment_select', 'connect_equipment', 'equipment_result'].includes(view) ? 'text-blue-400' : ''}>Equipment</span>
-            <ChevronRight size={12} />
-            <span className={view === 'segment_select' ? 'text-blue-400' : ''}>Segment</span>
-            <ChevronRight size={12} />
-            <span className={view === 'field_calibration' ? 'text-blue-400' : ''}>Calibration</span>
-            <ChevronRight size={12} />
-            <span className={view === 'envelope' ? 'text-blue-400' : ''}>Envelope</span>
-            <ChevronRight size={12} />
-            <span className={view === 'capture' ? 'text-blue-400' : ''}>Capture</span>
-          </div>
-
-          <button onClick={resetSimulation} className="p-2 bg-slate-800 text-slate-400 hover:text-white rounded-xl transition-colors" title="Reset demo">
-            <RefreshCcw size={14} />
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 flex items-center justify-center relative bg-slate-950 p-6">
-        {children}
-      </div>
-    </div>
-  );
-
   return (
-    <Shell>
+    <SecureWorkflowShell view={view} persona={persona} resetSimulation={resetSimulation} operatingMode={operatingMode} setOperatingMode={setOperatingMode}>
       {/* 1. SECURE ACCESS */}
       {view === 'auth' && (
         <div className="max-w-5xl w-full grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-6 animate-in fade-in zoom-in-95 duration-700">
@@ -447,8 +557,8 @@ const App = () => {
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">User ID / Email</label>
                 <input
-                  value={loginEmail}
-                  onChange={(e) => setLoginEmail(e.target.value)}
+                  value={loginForm.email}
+                  onChange={(e) => updateLoginForm('email', e.target.value)}
                   placeholder="julius.entry@dicri.demo"
                   className="mt-2 w-full bg-slate-950 border border-white/10 rounded-2xl px-4 py-4 text-sm text-white outline-none focus:border-blue-500"
                 />
@@ -456,8 +566,8 @@ const App = () => {
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Password</label>
                 <input
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  value={loginForm.password}
+                  onChange={(e) => updateLoginForm('password', e.target.value)}
                   placeholder="Type anything for demo"
                   type="password"
                   className="mt-2 w-full bg-slate-950 border border-white/10 rounded-2xl px-4 py-4 text-sm text-white outline-none focus:border-blue-500"
@@ -466,9 +576,10 @@ const App = () => {
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Demo MFA Code</label>
                 <input
-                  value={mfa}
-                  onChange={(e) => setMfa(e.target.value)}
+                  value={loginForm.mfaCode}
+                  onChange={(e) => updateLoginForm('mfaCode', e.target.value)}
                   placeholder="Any code"
+                  inputMode="numeric"
                   className="mt-2 w-full bg-slate-950 border border-white/10 rounded-2xl px-4 py-4 text-sm text-white outline-none focus:border-blue-500"
                 />
               </div>
@@ -490,8 +601,8 @@ const App = () => {
                 return (
                   <button
                     key={email}
-                    onClick={() => setLoginEmail(email)}
-                    className={`p-4 rounded-3xl border text-left transition-all ${loginEmail === email ? 'bg-blue-600/20 border-blue-500/50' : 'bg-slate-950/50 border-white/5 hover:border-white/20'}`}
+                    onClick={() => selectCredentialProfile(email)}
+                    className={`p-4 rounded-3xl border text-left transition-all ${selectedProfileId === email ? 'bg-blue-600/20 border-blue-500/50' : 'bg-slate-950/50 border-white/5 hover:border-white/20'}`}
                   >
                     <div className="flex items-center gap-4">
                       <div className={`h-12 w-12 rounded-2xl ${p.color} flex items-center justify-center text-white font-black`}>
@@ -749,25 +860,47 @@ const App = () => {
         </div>
       )}
 
-      {/* 6. SEGMENT ASSIGNMENT / GEOFENCE GATE */}
+      {/* 6. SEGMENT ASSIGNMENT / LOCATION GATE */}
       {view === 'segment_select' && persona && (
         <div className="max-w-6xl w-full bg-slate-900/70 border border-white/10 rounded-[3rem] p-10 shadow-2xl backdrop-blur-3xl space-y-8 animate-in slide-in-from-bottom-8 duration-500">
           <div>
             <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em]">Segment Authorization</p>
             <h2 className="text-3xl font-black text-white mt-2">Assigned segments near you</h2>
             <p className="text-sm text-slate-400 mt-2">
-              The platform separates assignment authority from geography. A user may be assigned but too far away, or nearby but not authorized.
+              The platform separates assignment authority from location assurance. A user may be assigned but outside the approved location envelope, or nearby but not authorized.
             </p>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <InfoPanel title="Authorized App Profile" items={[
+              ['App Instance ID', APP_PROFILE.appInstanceId],
+              ['Assigned Organization', APP_PROFILE.assignedOrganization],
+              ['Assigned Crew/User', persona.name],
+              ['Authorized Equipment', APP_PROFILE.authorizedEquipment],
+              ['Authorized Projects/Segments', APP_PROFILE.authorizedSegments],
+              ['Last Authorization Sync', APP_PROFILE.lastAuthorizationSync],
+              ['Offline Trust Window', APP_PROFILE.offlineTrustWindow],
+              ['Status', APP_PROFILE.status],
+            ]} />
+            <InfoPanel title="Offline Work Package" items={[
+              ['Segment Package', OFFLINE_PACKAGE.segmentPackage],
+              ['Last Sync', OFFLINE_PACKAGE.lastSync],
+              ['Offline Trust Window', OFFLINE_PACKAGE.offlineTrustWindow],
+              ['Trust Window Remaining', OFFLINE_PACKAGE.trustWindowRemaining],
+              ['Segments Available Offline', OFFLINE_PACKAGE.segmentsAvailableOffline],
+              ['Evidence Upload Status', OFFLINE_PACKAGE.uploadStatus],
+            ]} />
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             {SEGMENTS.map(seg => {
               const isLocked = seg.status === 'Locked';
               return (
-                <button
+                <div
                   key={seg.id}
                   onClick={() => selectSegment(seg)}
-                  disabled={isLocked}
+                  role="button"
+                  tabIndex={isLocked ? -1 : 0}
                   className={`p-6 rounded-3xl border text-left transition-all ${
                     isLocked
                       ? 'bg-slate-950/30 border-white/5 opacity-70 cursor-not-allowed'
@@ -784,8 +917,9 @@ const App = () => {
                       <div className="grid grid-cols-2 gap-3">
                         <MiniStatus label="Assignment" value={seg.assignment} good={seg.assignment === 'Assigned'} />
                         <MiniStatus label="Distance" value={`${seg.distanceKm} km`} good={seg.distanceKm <= 2.5} />
-                        <MiniStatus label="Geofence" value={seg.geofence} good={seg.geofence === 'Matched'} />
+                        <MiniStatus label="Location Gate" value={seg.locationAssurance.label} status={assuranceStatus(seg.locationAssurance.state)} />
                         <MiniStatus label="Window" value={seg.window} good={seg.window === 'Open'} />
+                        <MiniStatus label="Offline Package" value={seg.offlineStatus} status={seg.offlineStatus === 'Loaded' ? 'green' : 'amber'} />
                       </div>
                     </div>
                     <div className={`px-3 py-2 rounded-2xl border text-[9px] font-black uppercase tracking-widest flex items-center gap-2 ${
@@ -796,11 +930,9 @@ const App = () => {
                     </div>
                   </div>
                   {isLocked && (
-                    <div className="mt-5 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold flex items-center gap-3">
-                      <AlertCircle size={16} /> {seg.reason}
-                    </div>
+                    <OfflineExceptionPanel reason={seg.reason} offlineStatus={seg.offlineStatus} />
                   )}
-                </button>
+                </div>
               );
             })}
           </div>
@@ -860,16 +992,23 @@ const App = () => {
           </div>
 
           <div className="p-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            <GateRow icon={UserCheck} label="Authenticated User" value={persona.name} status="green" />
-            <GateRow icon={Shield} label="Certified Role" value={`${persona.role} · ${persona.certificationId}`} status="green" />
-            <GateRow icon={Building2} label="Organization" value={persona.organization} status="green" />
-            <GateRow icon={HardDrive} label="Registered Equipment" value={`${selectedEquipmentType} · ${deviceScenario.certificateNo}`} status="green" />
-            <GateRow icon={Gauge} label="Registry Calibration" value={deviceScenario.calibrationStatus} status="green" />
-            <GateRow icon={CheckCircle2} label="Field Calibration" value={fieldCalComplete ? 'Complete' : 'Pending'} status={fieldCalComplete ? 'green' : 'amber'} />
-            <GateRow icon={MapPin} label="Segment" value={selectedSegment.id} status="green" />
-            <GateRow icon={Navigation} label="Geofence" value={selectedSegment.geofence} status="green" />
-            <GateRow icon={Clock} label="Capture Window" value={selectedSegment.window} status="green" />
+            <GateRow icon={Smartphone} label="App Instance" value="Authorized" status="green" />
+            <GateRow icon={UserCheck} label="Worker Role" value="Passed" status="green" />
+            <GateRow icon={HardDrive} label="Equipment Authorization" value="Passed" status="green" />
+            <GateRow icon={Gauge} label="Registry Calibration" value="Valid" status="green" />
+            <GateRow icon={MapPin} label="Segment Assignment" value="Passed" status="green" />
+            <GateRow icon={Navigation} label="Location/Time" value="Valid" status={assuranceStatus(selectedSegment.locationAssurance.state)} />
+            <GateRow icon={Lock} label="Evidence Lock" value="Ready" status="green" />
+            <GateRow icon={Shield} label="Review Authority" value={operatingMode === 'Owner-Operated SaaS' ? 'Submit to DICRI Review' : 'DICRI-controlled'} status="blue" />
+            <GateRow icon={Building2} label="Owner Visibility" value={persona.organization} status="blue" />
           </div>
+
+          <div className="mx-8 mb-6 rounded-3xl border border-blue-500/20 bg-blue-500/10 p-5">
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-300">{operatingMode}</p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-300">{OPERATING_MODE_COPY[operatingMode]}</p>
+          </div>
+
+          <LocationAssuranceDetails segment={selectedSegment} equipmentName={selectedEquipmentType} />
 
           <div className="px-8 pb-8 flex flex-col md:flex-row gap-3">
             <button onClick={() => setView('field_calibration')} className="px-6 py-4 rounded-2xl bg-slate-800 text-slate-400 hover:text-white font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
@@ -894,7 +1033,7 @@ const App = () => {
               <div className="h-8 w-px bg-white/10" />
               <div className="hidden md:flex items-center space-x-2 text-slate-300">
                 <Navigation size={14} className="text-green-500" />
-                <span className="text-[10px] font-bold tracking-tight">Geo-Bound · {deviceScenario?.certificateNo}</span>
+                <span className="text-[10px] font-bold tracking-tight">Location-Assured · {deviceScenario?.certificateNo}</span>
               </div>
             </div>
             <button onClick={resetSimulation} className="p-2 hover:bg-white/5 rounded-xl transition-colors"><X size={18} className="text-slate-500" /></button>
@@ -918,6 +1057,7 @@ const App = () => {
             <div className="w-80 bg-slate-900/40 backdrop-blur-md border border-white/10 rounded-3xl flex flex-col overflow-hidden shadow-xl">
               <div className="p-6 border-b border-white/5 bg-slate-900/40">
                 <span className="text-sm font-black uppercase tracking-tight text-white font-mono">Evidence Log</span>
+                <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-slate-500">Raw Captured / Pending Validation / Policy-Admissible</p>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {captures.length === 0 && (
@@ -935,6 +1075,9 @@ const App = () => {
                       <div className="flex justify-between"><span>TIMESTAMP</span> <span className="text-white font-bold">{cap.time}</span></div>
                       <div className="flex justify-between"><span>SEGMENT</span> <span className="text-slate-300">{cap.segment}</span></div>
                       <div className="flex justify-between"><span>DEVICE CERT</span> <span className="text-slate-300">{cap.deviceCert}</span></div>
+                      <div className="flex justify-between"><span>EVIDENCE STATUS</span> <span className="text-amber-300">{cap.evidenceStatus}</span></div>
+                      <div className="flex justify-between"><span>ADMISSIBILITY</span> <span className="text-amber-300">{cap.admissibility}</span></div>
+                      <div className="flex justify-between"><span>WORM LOCK</span> <span className="text-green-400">{cap.wormStatus}</span></div>
                       <div className="flex justify-between"><span>LINK</span> <span className="text-slate-300">0x...{Math.random().toString(16).slice(2, 6).toUpperCase()}</span></div>
                     </div>
                   </div>
@@ -944,16 +1087,117 @@ const App = () => {
           </div>
         </div>
       )}
-    </Shell>
+    </SecureWorkflowShell>
   );
 };
 
-const MiniStatus = ({ label, value, good }) => (
-  <div className="p-3 rounded-2xl bg-slate-900/70 border border-white/5">
-    <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{label}</p>
-    <p className={`text-xs font-black mt-1 ${good ? 'text-green-400' : 'text-amber-400'}`}>{value}</p>
+const LocationAssuranceDetails = ({ segment, equipmentName }) => {
+  const assurance = segment.locationAssurance;
+  const method = methodFromEquipment(equipmentName, segment);
+  const methodChecks = METHOD_ASSURANCE_CHECKS[method] || METHOD_ASSURANCE_CHECKS.photo;
+  const details = [
+    ['Location envelope', assuranceResultLabel(assurance.geofenceResult)],
+    ['Assignment location', assuranceResultLabel(assurance.assignmentLocationMatch)],
+    ['Distance to segment', `${assurance.distanceKm} km`],
+    ['GNSS quality', titleCaseCheck(assurance.gnssQuality)],
+    ['Time consistency', assuranceResultLabel(assurance.timeCheck)],
+    ['Network sanity check', assuranceResultLabel(assurance.networkSanityCheck)],
+    ['Spoofing indicators', assurance.spoofingIndicators === 'none_detected' ? 'None detected' : assuranceResultLabel(assurance.spoofingIndicators)],
+    ['Location assurance state', assurance.label],
+  ];
+
+  return (
+    <div className="mx-8 mb-8 rounded-3xl border border-white/10 bg-slate-950/50 p-6">
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em]">Location Assurance Details</p>
+          <h3 className="text-xl font-black text-white mt-2">Method-aware location trust checks</h3>
+          <p className="text-xs text-slate-400 mt-2 max-w-3xl">
+            Location assurance is not a GPS-only decision. DICRI evaluates assignment match, device trust, timing, telemetry, scan path, spoofing/anomaly indicators, and evidence integrity according to the capture method.
+          </p>
+        </div>
+        <div className={`px-4 py-3 rounded-2xl border text-[10px] font-black uppercase tracking-widest ${statusClasses[assuranceStatus(assurance.state)]}`}>
+          Location Assurance: {assurance.label}
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        {details.map(([label, value]) => (
+          <div key={label} className="rounded-2xl border border-white/5 bg-slate-900/70 p-4">
+            <p className="text-[8px] font-black uppercase tracking-widest text-slate-500">{label}</p>
+            <p className="mt-1 text-xs font-black text-white">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-blue-500/15 bg-blue-500/5 p-4">
+        <p className="text-[9px] font-black uppercase tracking-widest text-blue-300">Capture Method: {titleCaseCheck(method)}</p>
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+          {methodChecks.map((check) => (
+            <div key={check} className="flex items-center gap-2 rounded-xl border border-white/5 bg-slate-950/45 px-3 py-2 text-[11px] font-bold text-slate-300">
+              <CheckCircle2 size={13} className="text-green-400" />
+              {check}
+            </div>
+          ))}
+        </div>
+        {assurance.reason && (
+          <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs font-bold text-amber-300">
+            Reason: {assurance.reason}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const InfoPanel = ({ title, items }) => (
+  <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-5">
+    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-400">{title}</p>
+    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {items.map(([label, value]) => (
+        <div key={label} className="rounded-2xl border border-white/5 bg-slate-900/70 p-3">
+          <p className="text-[8px] font-black uppercase tracking-widest text-slate-500">{label}</p>
+          <p className="mt-1 text-xs font-black text-white">{value}</p>
+        </div>
+      ))}
+    </div>
   </div>
 );
+
+const OfflineExceptionPanel = ({ reason, offlineStatus }) => (
+  <div className="mt-5 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs font-bold space-y-4">
+    <div className="flex items-start gap-3">
+      <AlertCircle size={16} className="mt-0.5 shrink-0" />
+      <div>
+        <p>{reason}</p>
+        {offlineStatus === 'Not Available' && (
+          <p className="mt-2 text-red-200">
+            Segment not available in the offline work package. Capture may proceed only as exception evidence and will not become certificate-eligible until backend validation is complete.
+          </p>
+        )}
+      </div>
+    </div>
+    {offlineStatus === 'Not Available' && (
+      <div className="flex flex-wrap gap-2">
+        {['Try Sync Again', 'Capture Exception Evidence', 'Contact Supervisor'].map((action) => (
+          <button key={action} onClick={(event) => event.stopPropagation()} className="rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-red-100">
+            {action}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+);
+
+const MiniStatus = ({ label, value, good, status }) => {
+  const color = status === 'red' ? 'text-red-400' : status === 'amber' ? 'text-amber-400' : status === 'green' || good ? 'text-green-400' : 'text-amber-400';
+  return (
+  <div className="p-3 rounded-2xl bg-slate-900/70 border border-white/5">
+    <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{label}</p>
+    <p className={`text-xs font-black mt-1 ${color}`}>{value}</p>
+  </div>
+  );
+};
 
 const GateRow = ({ icon: Icon, label, value, status = 'slate' }) => (
   <div className={`p-5 rounded-3xl border ${statusClasses[status]} flex items-center gap-4`}>

@@ -236,11 +236,24 @@ select {
 }
 
 .metric-card {
+  text-align: left;
+  color: inherit;
   min-height: 136px;
   padding: 18px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.045);
   border-radius: 8px;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.metric-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(82, 209, 220, 0.42);
+  background: rgba(82, 209, 220, 0.08);
+}
+
+.metric-card.attention {
+  border-color: rgba(203, 164, 87, 0.42);
 }
 
 .metric-card svg {
@@ -329,6 +342,42 @@ select {
   gap: 12px;
 }
 
+.gate-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.coverage-note {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 13px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.coverage-note.pass {
+  border-color: rgba(73, 211, 154, 0.28);
+  background: rgba(73, 211, 154, 0.07);
+}
+
+.coverage-note.warning {
+  border-color: rgba(203, 164, 87, 0.42);
+  background: rgba(203, 164, 87, 0.08);
+}
+
+.coverage-note.blocked {
+  border-color: rgba(240, 103, 103, 0.42);
+  background: rgba(240, 103, 103, 0.08);
+}
+
+.coverage-note span {
+  color: #bdccda;
+  line-height: 1.45;
+  font-size: 0.9rem;
+}
+
 .gate,
 .pathway,
 .device-card,
@@ -344,6 +393,50 @@ select {
   gap: 10px;
   min-height: 122px;
   padding: 16px;
+}
+
+.gate-row {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.gate-row div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.gate-row p {
+  margin: 0;
+  color: #bdccda;
+  font-size: 0.9rem;
+}
+
+.gate-row.pass {
+  border-color: rgba(73, 211, 154, 0.28);
+}
+
+.gate-row.warning {
+  border-color: rgba(203, 164, 87, 0.42);
+}
+
+.gate-row.blocked {
+  border-color: rgba(240, 103, 103, 0.42);
+}
+
+.gate-lines {
+  display: grid;
+  gap: 6px;
+}
+
+.gate-lines span {
+  color: #dce8f2;
+  font-size: 0.86rem;
 }
 
 .gate.pass {
@@ -399,7 +492,6 @@ select {
 
 .table-row {
   display: grid;
-  grid-template-columns: 0.7fr 1.5fr 0.65fr 1fr 1fr 0.7fr;
   gap: 12px;
   width: 100%;
   padding: 12px;
@@ -408,6 +500,39 @@ select {
   background: rgba(255, 255, 255, 0.02);
   color: #dbe8f2;
   text-align: left;
+}
+
+.table-row.segment {
+  grid-template-columns: 0.8fr 1.6fr 1.2fr 0.8fr 0.7fr 1.1fr 1fr;
+}
+
+.table-row.audit {
+  grid-template-columns: 1fr 0.9fr 0.85fr 0.6fr 1fr 1.15fr 1fr 1.1fr;
+}
+
+.table-row.equipment {
+  grid-template-columns: 0.75fr 0.85fr 1.35fr 0.85fr 1.15fr 0.9fr 0.9fr 1.2fr 1.25fr 0.8fr;
+}
+
+.table-row.exceptions {
+  grid-template-columns: 0.75fr 0.8fr 0.7fr 0.85fr 0.95fr 1fr 1.5fr 0.85fr 1.7fr;
+}
+
+.table-row.risk {
+  grid-template-columns: 0.75fr 0.8fr 0.8fr 0.8fr 0.7fr 1.05fr 1.1fr 0.9fr 0.9fr;
+}
+
+.table-row.quality-row {
+  grid-template-columns: 0.95fr 1fr 0.85fr 0.55fr 0.65fr 0.95fr 0.7fr 0.75fr 1.2fr 1fr;
+}
+
+.table-row button {
+  width: max-content;
+  border: 1px solid rgba(82, 209, 220, 0.22);
+  background: rgba(82, 209, 220, 0.08);
+  color: #dff8fb;
+  border-radius: 8px;
+  padding: 7px 9px;
 }
 
 .table-row.header {
@@ -419,6 +544,10 @@ select {
 
 .table-row.row-selected {
   background: rgba(82, 209, 220, 0.12);
+}
+
+.clickable-row {
+  cursor: pointer;
 }
 
 .detail-panel,
@@ -467,6 +596,327 @@ select {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.summary-grid.quality {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.summary-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.summary-card span {
+  display: block;
+  color: #94a7b9;
+  font-size: 0.76rem;
+  min-height: 34px;
+}
+
+.summary-card strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.35rem;
+  color: #ffffff;
+}
+
+.threshold-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.threshold-row strong {
+  flex: 1 1 220px;
+  border: 1px solid rgba(203, 164, 87, 0.25);
+  background: rgba(203, 164, 87, 0.09);
+  color: #e4c27c;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.tolerance-gauge {
+  display: grid;
+  gap: 12px;
+  margin: 6px 0 14px;
+}
+
+.gauge-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: 50fr 25fr 25fr;
+  min-height: 42px;
+  border-radius: 8px;
+  overflow: visible;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.zone {
+  min-height: 42px;
+}
+
+.pass-zone {
+  background: linear-gradient(90deg, rgba(73, 211, 154, 0.28), rgba(82, 209, 220, 0.22));
+}
+
+.review-zone {
+  background: rgba(203, 164, 87, 0.28);
+}
+
+.reject-zone {
+  background: rgba(240, 103, 103, 0.28);
+}
+
+.threshold-marker,
+.deviation-marker {
+  position: absolute;
+  top: -8px;
+  bottom: -8px;
+  width: 2px;
+  transform: translateX(-1px);
+}
+
+.threshold-marker.client {
+  background: #e4c27c;
+}
+
+.threshold-marker.system {
+  background: #ff9f9f;
+}
+
+.deviation-marker {
+  background: #ffffff;
+  width: 3px;
+  z-index: 2;
+}
+
+.threshold-marker b,
+.deviation-marker b {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 0.68rem;
+  color: #dbe8f2;
+}
+
+.deviation-marker b {
+  color: #ffffff;
+}
+
+.gauge-labels {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.gauge-labels span {
+  color: #a9bbcc;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.64);
+  backdrop-filter: blur(8px);
+}
+
+.evidence-modal {
+  width: min(620px, 100%);
+  border: 1px solid rgba(82, 209, 220, 0.24);
+  background: linear-gradient(135deg, rgba(12, 23, 36, 0.98), rgba(7, 14, 24, 0.98));
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
+}
+
+.icon-action {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #f5f8fb;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.field-photo-placeholder {
+  position: relative;
+  min-height: 260px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(180deg, rgba(20, 35, 49, 0.92), rgba(9, 17, 28, 0.96)),
+    repeating-linear-gradient(18deg, rgba(255, 255, 255, 0.03) 0 2px, transparent 2px 12px);
+  margin-bottom: 12px;
+}
+
+.photo-horizon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 32%;
+  height: 2px;
+  background: rgba(82, 209, 220, 0.32);
+}
+
+.photo-ground {
+  position: absolute;
+  inset: 43% 0 0;
+  background:
+    linear-gradient(160deg, rgba(92, 73, 48, 0.44), rgba(26, 31, 36, 0.82)),
+    repeating-linear-gradient(-12deg, rgba(228, 194, 124, 0.08) 0 3px, transparent 3px 18px);
+}
+
+.photo-marker {
+  position: absolute;
+  left: 58%;
+  top: 50%;
+  width: 74px;
+  height: 74px;
+  border: 2px solid #e4c27c;
+  border-radius: 50%;
+  box-shadow: 0 0 0 8px rgba(228, 194, 124, 0.1);
+}
+
+.field-photo-placeholder span {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  color: #dbe8f2;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.risk-chart {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.chart-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #dbe8f2;
+  margin-bottom: 8px;
+}
+
+.chart-title span {
+  color: #94a7b9;
+}
+
+.risk-chart svg {
+  width: 100%;
+  height: auto;
+}
+
+.grid-line {
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 1;
+}
+
+.risk-line {
+  stroke-width: 3;
+}
+
+.risk-line.pass {
+  stroke: #49d39a;
+}
+
+.risk-line.warning {
+  stroke: #e4c27c;
+}
+
+.risk-line.blocked {
+  stroke: #ff9f9f;
+}
+
+.risk-dot {
+  fill: #52d1dc;
+  stroke: #06111c;
+  stroke-width: 2;
+}
+
+.risk-chart text {
+  fill: #a9bbcc;
+  font-size: 9px;
+}
+
+.interpretation {
+  margin: 12px 0 0;
+  color: #e4c27c;
+  line-height: 1.5;
+}
+
+.review-list {
+  display: grid;
+  gap: 12px;
+}
+
+.review-card {
+  display: grid;
+  gap: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.review-card div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.review-card p {
+  margin: 0;
+  color: #bdccda;
+}
+
+.review-card span {
+  color: #94a7b9;
+  font-size: 0.82rem;
+}
+
+.review-card button {
+  width: max-content;
+  border: 1px solid rgba(82, 209, 220, 0.32);
+  background: rgba(82, 209, 220, 0.1);
+  color: #e8fbff;
+  border-radius: 8px;
+  padding: 9px 11px;
+}
+
+.equipment-layout {
+  grid-template-columns: minmax(0, 1.7fr) minmax(330px, 0.65fr);
+}
+
+.timeline-item small {
+  display: block;
+  margin-top: 8px;
+  color: #94a7b9;
+  line-height: 1.35;
 }
 
 .pathway {
